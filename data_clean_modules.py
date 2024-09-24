@@ -60,17 +60,20 @@ def join_title_ratings(title_path, ratings_path, ratings_schema):
         streaming=True
     )
 
+    if path.exists(ratings_path):
+        remove(ratings_path)
+
     remove_old_save_new_file(dataframe_to_write=title_lf, file_path=title_path)
 
 
-def create_genres_file_from_title_file(title_file_path, ratings_file_path):
+def create_genres_file_from_title_file(title_file_path, genres_file_path):
     lf = (
         pl.scan_parquet(title_file_path)
         .explode("genres")
         .select(["tconst", "genres"])
         .collect(streaming=True)
     )
-    remove_old_save_new_file(dataframe_to_write=lf, file_path=ratings_file_path)
+    remove_old_save_new_file(dataframe_to_write=lf, file_path=genres_file_path)
 
 
 def drop_genres_from_title(title_file_path):

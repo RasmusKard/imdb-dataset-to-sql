@@ -1,3 +1,5 @@
+DROP TABLE IF EXISTS `dataset_sql`.`content`;
+
 CREATE TABLE `dataset_sql`.`content` (
     `tconst` VARCHAR(12) NOT NULL,
     `titleType` ENUM(
@@ -12,6 +14,19 @@ CREATE TABLE `dataset_sql`.`content` (
     `runtimeMinutes` SMALLINT UNSIGNED NULL,
     `averageRating` DECIMAL(3, 1) UNSIGNED NOT NULL,
     `numVotes` MEDIUMINT UNSIGNED NOT NULL,
+    PRIMARY KEY (`tconst`),
+    UNIQUE INDEX `tconst_UNIQUE` (`tconst` ASC) VISIBLE
+);
+
+CREATE TABLE `content_genre` (
+    `tconst` VARCHAR(12) NOT NULL,
+    `genres` ENUM(
+        'tvMiniSeries',
+        'tvSeries',
+        'movie',
+        'tvMovie',
+        'tvSpecial'
+    ) NOT NULL,
     PRIMARY KEY (`tconst`),
     UNIQUE INDEX `tconst_UNIQUE` (`tconst` ASC) VISIBLE
 );
