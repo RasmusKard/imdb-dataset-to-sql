@@ -12,7 +12,7 @@ numVotes (MEDIUMINT (UNSIGNED)) - number of votes the title has received
 
 1. Change '/N' values to NULL
 1. Drop rows where genres = NULL
-1. Drop rows where titletype = 'tvEpisode' OR 'videoGame'
+1. Drop rows where titletype = 'tvEpisode' OR 'videoGame' OR 'short'
 1. Drop rows where isAdult = 1
 1. Drop columns:
 
@@ -20,7 +20,7 @@ numVotes (MEDIUMINT (UNSIGNED)) - number of votes the title has received
 -   isAdult
 -   endYear
 
-1. Where startYear = NULL change to 0
+1. Where startYear = NULL change to last seen value
 1. Join title table and ratings on tconst
 
 _GENRES TABLE_
@@ -34,6 +34,14 @@ genre (ENUM) – one genre per row
 
 **NOTES**
 
-Movie = ('movie', 'tvMovie', 'tvSpecial', 'short', 'video')
+Movie = ('movie', 'tvMovie', 'tvSpecial')
 
-TV Show = ('tvMiniSeries', 'tvSeries', 'tvShort')
+TV Show = ('tvMiniSeries', 'tvSeries')
+
+SCAN CSV WITH POLARS
+
+TO PARQUET
+
+SCAN PARQUET AND REMOVE BAD DATA
+
+PARQUET TO SQL
