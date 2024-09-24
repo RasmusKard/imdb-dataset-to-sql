@@ -45,3 +45,13 @@ TO PARQUET
 SCAN PARQUET AND REMOVE BAD DATA
 
 PARQUET TO SQL
+
+**UX NOTES**
+
+1. Look for a library to display progress of setting up DB and what it is currently doing
+1. Add custom filtering selection either through a config file or CLI
+
+**Parquet notes**
+
+1. Final file name should be a global stored in config
+1. Temp file names should be generated during program and deleted after use
