@@ -12,44 +12,73 @@ title_schema = {
     "titleType": pl.Categorical,
     "primaryTitle": pl.String,
     "originalTitle": pl.String,
-    "isAdult": pl.Int8,
-    "startYear": pl.Int16,
-    "endYear": pl.Int16,
-    "runtimeMinutes": pl.Int64,
+    "isAdult": pl.UInt8,
+    "startYear": pl.UInt16,
+    "endYear": pl.UInt16,
+    "runtimeMinutes": pl.UInt16,
     "genres": pl.String,
 }
 
 ALLOWED_TITLETYPES = ["movie", "tvSeries", "tvMovie", "tvSpecial", "tvMiniSeries"]
 
+# Filter IMDb public dataset title.basics.tsv file
+
+# lf = (
+#     pl.scan_csv(
+#         "title.tsv",
+#         separator="\t",
+#         null_values=r"\N",
+#         quote_char=None,
+#         schema=title_schema,
+#     )
+#     .with_columns(pl.col("startYear").forward_fill())
+#     .filter(pl.col("isAdult") == 0)
+#     .filter(pl.col("titleType").is_in(ALLOWED_TITLETYPES))
+#     .drop("originalTitle", "endYear", "isAdult")
+#     .filter(pl.col("genres").is_not_null())
+#     .with_columns(pl.col("genres").str.split(","))
+#     .filter((pl.col("genres").list.contains("Adult")).not_())
+#     .collect(streaming=True)
+# )
+
+
+# lf.write_parquet("title.parquet")
+
+# ratings_schema = {
+#     "tconst": pl.String,
+#     "averageRating": pl.Float32,
+#     "numVotes": pl.UInt32,
+# }
+
+# title_lf = pl.scan_parquet("title.parquet")
+
+# ratings_lf = pl.scan_csv(
+#     "title.ratings.tsv",
+#     separator="\t",
+#     null_values=r"\N",
+#     schema=ratings_schema,
+# )
+
+# joined_lf = title_lf.join(ratings_lf, how="inner", on="tconst").collect(streaming=True)
+
+
+# joined_lf.write_parquet("title.v2.parquet")
+
 
 lf = (
-    pl.scan_csv(
-        "title.tsv",
-        separator="\t",
-        null_values=r"\N",
-        quote_char=None,
-        schema=title_schema,
-    )
-    .with_columns(pl.col("startYear").forward_fill())
-    .filter(pl.col("isAdult") == 0)
-    .filter(pl.col("titleType").is_in(ALLOWED_TITLETYPES))
-    .drop("originalTitle", "endYear", "isAdult")
-    .filter(pl.col("genres").is_not_null())
-    .filter((pl.col("genres").str.split(",").list.contains("Adult")).not_())
+    pl.scan_parquet("title.v2.parquet")
+    .explode("genres")
+    .select(["tconst", "genres"])
     .collect(streaming=True)
 )
 
-lf.write_parquet("title.parquet")
 
-lf1 = pl.scan_parquet("title.parquet").group_by("titleType").agg(pl.count())
-
-print(lf1.collect())
-
-# lf2 = pl.scan_csv("title.ratings.tsv", separator="\t", null_values=r"\N")
-
-# lf1.join(lf2, on=pl.col("tconst"), how="inner").collect()
-
-# lf1.write_parquet("final.parquet")
+lf.write_parquet("ratings.final.parquet")
 
 
-# lf.write_database(table_name='titles',connection=mysql_engine, if_table_exists='replace')
+# title file drop ratings column
+
+
+# set sql schema (correct dtypes and one to many relationship between title and genres)
+
+# both to sql
