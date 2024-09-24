@@ -3,3 +3,4 @@ ratings.gz
 title.gz
 title.ratings.tsv
 title.tsv
+__pycache__
