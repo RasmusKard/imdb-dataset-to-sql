@@ -33,12 +33,14 @@ def clean_title_data(file_path, schema, allowed_titles):
             quote_char=None,
             schema=schema,
         )
+        # where startyear is None, replace it with last seen value
         .with_columns(pl.col("startYear").forward_fill())
         .filter(pl.col("isAdult") == 0)
         .filter(pl.col("titleType").is_in(allowed_titles))
         .drop("originalTitle", "endYear", "isAdult")
         .filter(pl.col("genres").is_not_null())
         .with_columns(pl.col("genres").str.split(","))
+        # remove content with the genre "Adult"
         .filter((pl.col("genres").list.contains("Adult")).not_())
         .collect(streaming=True)
     )

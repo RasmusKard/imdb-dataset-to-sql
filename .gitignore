@@ -4,3 +4,5 @@ title.gz
 title.ratings.tsv
 title.tsv
 __pycache__
+queries.sql
+.venv

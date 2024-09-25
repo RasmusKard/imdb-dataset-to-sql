@@ -1,47 +1,48 @@
 import pandas as pd
-from sqlalchemy import text
-from config import (
-    mysql_engine,
+
+
+def title_data_to_sql(
+    title_table_creation_sql,
+    title_table_drop_sql,
     title_file_path,
-    genres_file_path,
-    TITLE_TABLE_NAME,
-    TITLE_TABLE_DROP_SQL,
-    TITLE_TABLE_CREATION_SQL,
-    GENRES_TABLE_NAME,
-    GENRES_TABLE_DROP_SQL,
-    GENRES_TABLE_CREATION_SQL,
-)
-
-
-def title_data_to_sql():
-    with mysql_engine.begin() as connection:
-        for sql in [TITLE_TABLE_DROP_SQL, TITLE_TABLE_CREATION_SQL]:
+    title_table_name,
+    sql_engine,
+):
+    with sql_engine.begin() as connection:
+        for sql in [title_table_drop_sql, title_table_creation_sql]:
             connection.execute(sql)
 
     df = pd.read_parquet(title_file_path)
     df.to_sql(
-        TITLE_TABLE_NAME,
-        con=mysql_engine,
+        title_table_name,
+        con=sql_engine,
         if_exists="append",
         index=False,
         chunksize=10000,
     )
 
 
-def genre_data_to_sql():
-    with mysql_engine.begin() as connection:
-        for sql in [GENRES_TABLE_DROP_SQL, GENRES_TABLE_CREATION_SQL]:
+def genre_data_to_sql(
+    genres_table_drop_sql,
+    genres_table_creation_sql,
+    genres_file_path,
+    genres_table_name,
+    sql_engine,
+):
+    with sql_engine.begin() as connection:
+        for sql in [genres_table_drop_sql, genres_table_creation_sql]:
             connection.execute(sql)
 
     df = pd.read_parquet(genres_file_path)
     df.to_sql(
-        GENRES_TABLE_NAME,
-        con=mysql_engine,
+        genres_table_name,
+        con=sql_engine,
         if_exists="append",
         index=False,
         chunksize=10000,
     )
 
 
-title_data_to_sql()
-genre_data_to_sql()
+def add_foreign_key_sql(foreign_key_creation_sql, sql_engine):
+    with sql_engine.begin() as connection:
+        connection.execute(foreign_key_creation_sql)

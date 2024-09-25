@@ -1,8 +1,18 @@
-import random
-import string
 import polars as pl
 from sqlalchemy import create_engine, text
-from sqlalchemy.dialects.mysql import ENUM, SMALLINT, DECIMAL, MEDIUMINT, VARCHAR
+
+# ADD YOUR OWN DATABASE DETAILS!
+SQL_USERNAME = ""
+SQL_PASSWORD = ""
+SQL_ADDRESS = ""
+SQL_PORT = ""
+SQL_DATABASE_NAME = ""
+
+
+MYSQL_ENGINE = create_engine(
+    f"mysql+mysqlconnector://{SQL_USERNAME}:{SQL_PASSWORD}@{SQL_ADDRESS}:{SQL_PORT}/{SQL_DATABASE_NAME}"
+)
+
 
 # GLOBAL VARIABLES
 ALLOWED_TITLETYPES = ["movie", "tvSeries", "tvMovie", "tvSpecial", "tvMiniSeries"]
@@ -37,13 +47,13 @@ ALLOWED_GENRES = [
 ]
 
 # DATA PREPROCESSING VARIABLES
-title_file_path = "temp_file_title"
-ratings_file_path = "temp_file_ratings"
-genres_file_path = "temp_file_genres"
+TITLE_FILE_PATH = "temp_file_title"
+RATINGS_FILE_PATH = "temp_file_ratings"
+GENRES_FILE_PATH = "temp_file_genres"
 
 IMDB_TITLE_BASICS_URL = "https://datasets.imdbws.com/title.basics.tsv.gz"
 IMDB_TITLE_RATINGS_URL = "https://datasets.imdbws.com/title.ratings.tsv.gz"
-pl_title_schema = {
+PL_TITLE_SCHEMA = {
     "tconst": pl.String,
     "titleType": pl.Categorical,
     "primaryTitle": pl.String,
@@ -55,7 +65,7 @@ pl_title_schema = {
     "genres": pl.String,
 }
 
-pl_ratings_schema = {
+PL_RATINGS_SCHEMA = {
     "tconst": pl.String,
     "averageRating": pl.Float32,
     "numVotes": pl.UInt32,
@@ -63,9 +73,6 @@ pl_ratings_schema = {
 
 # SQL VARIABLES
 
-mysql_engine = create_engine(
-    "mysql+mysqlconnector://root:1234@localhost:3306/dataset_sql"
-)
 TITLE_TABLE_NAME = "title"
 TITLE_TABLE_DROP_SQL = text(f"""DROP TABLE IF EXISTS `{TITLE_TABLE_NAME}`;""")
 TITLE_TABLE_CREATION_SQL = text(
@@ -95,23 +102,10 @@ GENRES_TABLE_CREATION_SQL = text(
         PRIMARY KEY (`tconst`, `genres`)
     );"""
 )
-# TITLE_TABLE_SCHEMA = {
-#     "tconst": (VARCHAR(12), {"primary_key": True, "nullable": False}),
-#     "titleType": (
-#         ENUM(*ALLOWED_TITLETYPES),
-#         {"nullable": False},
-#     ),
-#     "primaryTitle": (VARCHAR(400), {"nullable": False}),
-#     "startYear": (SMALLINT(unsigned=True), {"nullable": False}),
-#     "runtimeMinutes": (SMALLINT(unsigned=True), {"nullable": True}),
-#     "averageRating": (DECIMAL(3, 1, unsigned=True), {"nullable": False}),
-#     "numVotes": (MEDIUMINT(unsigned=True), {"nullable": False}),
-# }
 
-# GENRES_TABLE_SCHEMA = {
-#     "tconst": (VARCHAR(12), {"primary_key": True, "nullable": False}),
-#     "titleType": (
-#         ENUM("tvMiniSeries", "tvSeries", "movie", "tvMovie", "tvSpecial"),
-#         {"nullable": False},
-#     ),
-# }
+FOREIGN_KEY_CREATION_SQL = text(
+    f"""ALTER TABLE {GENRES_TABLE_NAME}
+ADD CONSTRAINT `fk_content`
+FOREIGN KEY (`tconst`) 
+REFERENCES {TITLE_TABLE_NAME} (`tconst`)"""
+)
