@@ -6,3 +6,4 @@ title.tsv
 __pycache__
 queries.sql
 .venv
+plan.md

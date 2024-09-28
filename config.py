@@ -2,11 +2,11 @@ import polars as pl
 from sqlalchemy import create_engine, text
 
 # ADD YOUR OWN DATABASE DETAILS!
-SQL_USERNAME = ""
-SQL_PASSWORD = ""
-SQL_ADDRESS = ""
-SQL_PORT = ""
-SQL_DATABASE_NAME = ""
+SQL_USERNAME = "root"
+SQL_PASSWORD = "1234"
+SQL_ADDRESS = "localhost"
+SQL_PORT = "3306"
+SQL_DATABASE_NAME = "dataset_sql"
 
 
 MYSQL_ENGINE = create_engine(
@@ -79,15 +79,13 @@ TITLE_TABLE_CREATION_SQL = text(
     f"""
     CREATE TABLE `{TITLE_TABLE_NAME}` (
         `tconst` VARCHAR(12) NOT NULL,
-        `titleType` ENUM({','.join([f"'{titletype}'" for titletype in ALLOWED_TITLETYPES])}
-        ) NOT NULL,
+        `titleType` TINYINT UNSIGNED NOT NULL,
+        `genres` TINYINT UNSIGNED NOT NULL,
         `primaryTitle` VARCHAR(400) NOT NULL,
         `startYear` SMALLINT UNSIGNED NOT NULL,
         `runtimeMinutes` SMALLINT UNSIGNED NULL,
         `averageRating` DECIMAL(3, 1) UNSIGNED NOT NULL,
-        `numVotes` MEDIUMINT UNSIGNED NOT NULL,
-        PRIMARY KEY (`tconst`),
-        UNIQUE INDEX `tconst_UNIQUE` (`tconst` ASC) VISIBLE
+        `numVotes` MEDIUMINT UNSIGNED NOT NULL
     );"""
 )
 

@@ -3,6 +3,7 @@ from os import path, remove
 from shutil import copyfileobj
 from urllib.request import urlretrieve
 import polars as pl
+import pandas as pd
 
 
 def download_imdb_dataset(url, output_path):
@@ -81,3 +82,20 @@ def create_genres_file_from_title_file(title_file_path, genres_file_path):
 def drop_genres_from_title(title_file_path):
     lf = pl.scan_parquet(title_file_path).drop("genres").collect(streaming=True)
     remove_old_save_new_file(dataframe_to_write=lf, file_path=title_file_path)
+
+
+def change_str_to_int(df_file_path, column_name):
+    df = pl.read_parquet(df_file_path)
+    unique_values = df[column_name].arr.explode().unique().to_list()
+    value_dict = {}
+
+    for counter, value in enumerate(unique_values):
+        value_dict[value] = counter
+
+    df = df.with_columns(
+        pl.col(column_name)
+        .cast(pl.String)
+        .replace_strict(value_dict, return_dtype=pl.UInt8)
+    )
+
+    remove_old_save_new_file(dataframe_to_write=df, file_path=df_file_path)
