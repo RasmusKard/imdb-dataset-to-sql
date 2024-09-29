@@ -53,8 +53,8 @@ def create_reference_table(sql_engine, value_dict, column_name):
     table_creation_sql = text(
         f"""
     CREATE TABLE `{table_name}` (
-        `{id_col}` TINYINT UNSIGNED NOT NULL,
-        `{str_col}` VARCHAR(15) NOT NULL
+        `{id_col}` TINYINT UNSIGNED NOT NULL PRIMARY KEY,
+        `{str_col}` VARCHAR(15) NOT NULL UNIQUE
     );"""
     )
     with sql_engine.begin() as connection:
