@@ -87,6 +87,7 @@ def drop_genres_from_title(title_file_path):
 def change_str_to_int(df_file_path, column_name):
     df = pl.read_parquet(df_file_path)
     unique_values = df[column_name].arr.explode().unique().to_list()
+    unique_values.sort()
     value_dict = {}
 
     for counter, value in enumerate(unique_values):
@@ -99,3 +100,5 @@ def change_str_to_int(df_file_path, column_name):
     )
 
     remove_old_save_new_file(dataframe_to_write=df, file_path=df_file_path)
+
+    return value_dict

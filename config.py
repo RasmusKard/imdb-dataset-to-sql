@@ -80,7 +80,6 @@ TITLE_TABLE_CREATION_SQL = text(
     CREATE TABLE `{TITLE_TABLE_NAME}` (
         `tconst` VARCHAR(12) NOT NULL,
         `titleType` TINYINT UNSIGNED NOT NULL,
-        `genres` TINYINT UNSIGNED NOT NULL,
         `primaryTitle` VARCHAR(400) NOT NULL,
         `startYear` SMALLINT UNSIGNED NOT NULL,
         `runtimeMinutes` SMALLINT UNSIGNED NULL,
@@ -95,15 +94,7 @@ GENRES_TABLE_CREATION_SQL = text(
     f"""
     CREATE TABLE `{GENRES_TABLE_NAME}` (
         `tconst` VARCHAR(12) NOT NULL,
-        `genres` ENUM({','.join([f"'{genre}'" for genre in ALLOWED_GENRES])}
-        ) NOT NULL,
+        `genres` TINYINT UNSIGNED NOT NULL,
         PRIMARY KEY (`tconst`, `genres`)
     );"""
-)
-
-FOREIGN_KEY_CREATION_SQL = text(
-    f"""ALTER TABLE {GENRES_TABLE_NAME}
-ADD CONSTRAINT `fk_content`
-FOREIGN KEY (`tconst`) 
-REFERENCES {TITLE_TABLE_NAME} (`tconst`)"""
 )
