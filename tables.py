@@ -21,8 +21,13 @@ ALLOWED_VALUES = [
 # if not dont add anything into the to_sql() dtypes
 tables_dict = {
     "title": {
-        "dtypes": {},
-        "values": {"movieID": "tconst", "typeOfContent": "titleType"},
+        "dtypes": {"movieID": dtype.String(50)},
+        "values": {
+            # imdb_dataset_value_column : new_column_name
+            "tconst": "movieID",
+            "titleType": "titleType",
+            "genres": "genres",
+        },
     }
 }
 

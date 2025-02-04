@@ -43,7 +43,9 @@ def clean_title_data(file_path, schema):
             schema=schema,
         )
         # where startyear is None, replace it with last seen value
-        .with_columns(pl.col("startYear").forward_fill())
+        .with_columns(pl.col("startYear").forward_fill()).filter(
+            pl.col("genres").is_not_null()
+        )
     )
 
     blocked_titletypes_arr = config.get("blocked_titletypes")
@@ -57,8 +59,7 @@ def clean_title_data(file_path, schema):
         and config.get("is_split_genres_into_reftable") == True
     ):
         lf = (
-            lf.filter(pl.col("genres").is_not_null())
-            .with_columns(pl.col("genres").str.split(","))
+            lf.with_columns(pl.col("genres").str.split(","))
             .filter(~(pl.col("genres").list.contains("Adult")))
             .filter(pl.col("isAdult") == 0)
         )

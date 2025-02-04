@@ -89,6 +89,6 @@ dfsql.parquet_to_sql(
 )
 
 
-for file_path in [globals.TITLE_FILE_PATH, globals.GENRES_FILE_PATH]:
-    if path.exists(file_path):
-        remove(file_path)
+# for file_path in [globals.TITLE_FILE_PATH, globals.GENRES_FILE_PATH]:
+#     if path.exists(file_path):
+#         remove(file_path)

@@ -2,11 +2,7 @@ import pandas as pd
 from sqlalchemy.types import String
 
 
-def parquet_to_sql(
-    parquet_file_path,
-    table_name,
-    sql_engine,
-):
+def parquet_to_sql(parquet_file_path, table_name, sql_engine, columns_to_add=[]):
 
     df = pd.read_parquet(parquet_file_path)
     df.to_sql(
@@ -15,7 +11,7 @@ def parquet_to_sql(
         if_exists="replace",
         chunksize=10000,
         index=False,
-        dtype={"tconst": String(80)},
+        dtype={"tconst": String(80), "test": String(5)},
     )
 
 
