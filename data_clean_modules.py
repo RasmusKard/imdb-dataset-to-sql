@@ -47,7 +47,7 @@ def clean_title_data(file_path, schema):
     )
 
     blocked_titletypes_arr = config.get("blocked_titletypes")
-    if blocked_titletypes_arr and len(blocked_titletypes_arr) > 0:
+    if blocked_titletypes_arr:
         # reverse the is_in using tilde operator
         lf = lf.filter(~pl.col("titleType").is_in(blocked_titletypes_arr))
 
@@ -59,14 +59,14 @@ def clean_title_data(file_path, schema):
         lf = (
             lf.filter(pl.col("genres").is_not_null())
             .with_columns(pl.col("genres").str.split(","))
-            .filter((pl.col("genres").list.contains("Adult")).not_())
+            .filter(~(pl.col("genres").list.contains("Adult")))
             .filter(pl.col("isAdult") == 0)
         )
     elif (
         config.get("is_remove_adult") == True
         and config.get("is_split_genres_into_reftable") != True
     ):
-        lf = lf.filter(pl.col("genres").str.split(",").list.contains("Adult")).not_()
+        lf = lf.filter(~pl.col("genres").str.split(",").list.contains("Adult"))
 
     remove_old_save_new_file(
         dataframe_to_write=lf.drop("originalTitle", "endYear", "isAdult").collect(),

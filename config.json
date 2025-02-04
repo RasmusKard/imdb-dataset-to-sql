@@ -6,10 +6,11 @@
 		"port": 3306,
 		"user": "root",
 		"password": "1234",
-		"database": "imdb_data"
+		"database": "dataset_sql"
 	},
-	"is_split_genres_into_reftable": true,
-	"is_convert_genres_str_to_int": false,
+	"is_split_genres_into_reftable": false,
+	"is_convert_title_type_str_to_int": false,
 	"is_remove_adult": true,
-	"use_streaming": true
+	"use_streaming": true,
+	"is_ignore_db_has_tables_warning": true
 }

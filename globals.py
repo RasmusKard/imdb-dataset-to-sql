@@ -1,17 +1,4 @@
 import polars as pl
-from sqlalchemy import create_engine, text
-
-# ADD YOUR OWN DATABASE DETAILS!
-SQL_USERNAME = "root"
-SQL_PASSWORD = "1234"
-SQL_ADDRESS = "localhost"
-SQL_PORT = "3306"
-SQL_DATABASE_NAME = "dataset_sql"
-
-
-MYSQL_ENGINE = create_engine(
-    f"mysql+mysqlconnector://{SQL_USERNAME}:{SQL_PASSWORD}@{SQL_ADDRESS}:{SQL_PORT}/{SQL_DATABASE_NAME}"
-)
 
 # DATA PREPROCESSING VARIABLES
 TITLE_FILE_PATH = "temp_file_title"
