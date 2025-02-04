@@ -3,7 +3,6 @@ from os import path, remove
 from shutil import copyfileobj
 from urllib.request import urlretrieve
 import polars as pl
-import pandas as pd
 import json
 
 
@@ -52,37 +51,25 @@ def clean_title_data(file_path, schema):
         # reverse the is_in using tilde operator
         lf = lf.filter(~pl.col("titleType").is_in(blocked_titletypes_arr))
 
-    # if config.get("is_remove_adult") == True:
-    #     lf = lf.filter((pl.col("genres").list.contains("Adult")).not_()).filter(
-    #         pl.col("isAdult") == 0
-    #     )
-
+    # if config has both remove adult and split genres the operation can be done more efficiently
     if (
         config.get("is_remove_adult") == True
         and config.get("is_split_genres_into_reftable") == True
     ):
-        print("hit")
         lf = (
             lf.filter(pl.col("genres").is_not_null())
             .with_columns(pl.col("genres").str.split(","))
             .filter((pl.col("genres").list.contains("Adult")).not_())
             .filter(pl.col("isAdult") == 0)
         )
-
     elif (
         config.get("is_remove_adult") == True
         and config.get("is_split_genres_into_reftable") != True
     ):
         lf = lf.filter(pl.col("genres").str.split(",").list.contains("Adult")).not_()
 
-    # if config.get("is_split_genres_into_reftable"):
-    #     lf = lf.filter(pl.col("genres").is_not_null()).with_columns(
-    #         pl.col("genres").str.split(",")
-    #     )
-
-    lf = lf.drop("originalTitle", "endYear", "isAdult").collect()
     remove_old_save_new_file(
-        dataframe_to_write=lf,
+        dataframe_to_write=lf.drop("originalTitle", "endYear", "isAdult").collect(),
         file_path=file_path,
     )
 
@@ -108,13 +95,15 @@ def join_title_ratings(title_path, ratings_path, ratings_schema):
 
 
 def create_genres_file_from_title_file(title_file_path, genres_file_path):
-    lf = (
-        pl.scan_parquet(title_file_path)
-        .explode("genres")
-        .select(["tconst", "genres"])
-        .collect(streaming=True)
+    lf = pl.scan_parquet(title_file_path).explode("genres").select(["tconst", "genres"])
+
+    blocked_genres_arr = config.get("blocked_genres")
+    if blocked_genres_arr and len(blocked_genres_arr) > 0:
+        # reverse the is_in using tilde operator
+        lf = lf.filter(~pl.col("genres").is_in(blocked_genres_arr))
+    remove_old_save_new_file(
+        dataframe_to_write=lf.collect(streaming=True), file_path=genres_file_path
     )
-    remove_old_save_new_file(dataframe_to_write=lf, file_path=genres_file_path)
 
 
 def drop_genres_from_title(title_file_path):
@@ -124,7 +113,6 @@ def drop_genres_from_title(title_file_path):
 
 def change_str_to_int(df_file_path, column_name):
     df = pl.read_parquet(df_file_path)
-    print(df.head(50))
     unique_values = df[column_name].explode().unique().to_list()
     unique_values.sort()
     value_dict = {}

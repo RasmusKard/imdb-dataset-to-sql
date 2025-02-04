@@ -49,21 +49,18 @@ dfsql.create_reference_table(
 )
 
 
-dfsql.title_data_to_sql(
-    title_table_creation_sql=config.TITLE_TABLE_CREATION_SQL,
-    title_table_drop_sql=config.TITLE_TABLE_DROP_SQL,
-    title_file_path=config.TITLE_FILE_PATH,
-    title_table_name=config.TITLE_TABLE_NAME,
+# title and ratings parquet files to sql tables
+dfsql.parquet_to_sql(
+    parquet_file_path=config.TITLE_FILE_PATH,
+    table_name=config.TITLE_TABLE_NAME,
+    sql_engine=config.MYSQL_ENGINE,
+)
+dfsql.parquet_to_sql(
+    parquet_file_path=config.GENRES_FILE_PATH,
+    table_name=config.GENRES_TABLE_NAME,
     sql_engine=config.MYSQL_ENGINE,
 )
 
-dfsql.genre_data_to_sql(
-    genres_table_drop_sql=config.GENRES_TABLE_DROP_SQL,
-    genres_table_creation_sql=config.GENRES_TABLE_CREATION_SQL,
-    genres_file_path=config.GENRES_FILE_PATH,
-    genres_table_name=config.GENRES_TABLE_NAME,
-    sql_engine=config.MYSQL_ENGINE,
-)
 
 for file_path in [config.TITLE_FILE_PATH, config.GENRES_FILE_PATH]:
     if path.exists(file_path):
