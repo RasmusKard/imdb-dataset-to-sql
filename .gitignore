@@ -7,3 +7,6 @@ __pycache__
 queries.sql
 .venv
 plan.md
+title.basics.tsv
+temp_file_genres
+temp_file_title

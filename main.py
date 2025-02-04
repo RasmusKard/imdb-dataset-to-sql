@@ -2,15 +2,19 @@ import data_clean_modules as dm
 import dataframe_to_mysql as dfsql
 import config
 from os import path, remove
+import json
+
+# generate names for temp files here
 
 
-dm.download_imdb_dataset(config.IMDB_TITLE_BASICS_URL, config.TITLE_FILE_PATH)
-dm.download_imdb_dataset(config.IMDB_TITLE_RATINGS_URL, config.RATINGS_FILE_PATH)
+# Download ratings and title files from IMDb
+# dm.download_imdb_dataset(config.IMDB_TITLE_BASICS_URL, config.TITLE_FILE_PATH)
+# dm.download_imdb_dataset(config.IMDB_TITLE_RATINGS_URL, config.RATINGS_FILE_PATH)
+
 
 dm.clean_title_data(
     file_path=config.TITLE_FILE_PATH,
     schema=config.PL_TITLE_SCHEMA,
-    allowed_titles=config.ALLOWED_TITLETYPES,
 )
 
 dm.join_title_ratings(
@@ -25,9 +29,12 @@ dm.create_genres_file_from_title_file(
 
 dm.drop_genres_from_title(title_file_path=config.TITLE_FILE_PATH)
 
+print("done cleaning")
+
 titleType_values = dm.change_str_to_int(
     df_file_path=config.TITLE_FILE_PATH, column_name="titleType"
 )
+
 
 dfsql.create_reference_table(
     sql_engine=config.MYSQL_ENGINE, value_dict=titleType_values, column_name="titleType"

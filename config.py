@@ -61,7 +61,7 @@ PL_TITLE_SCHEMA = {
     "isAdult": pl.UInt8,
     "startYear": pl.UInt16,
     "endYear": pl.UInt16,
-    "runtimeMinutes": pl.UInt16,
+    "runtimeMinutes": pl.UInt32,
     "genres": pl.String,
 }
 

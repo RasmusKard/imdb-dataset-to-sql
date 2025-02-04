@@ -4,6 +4,14 @@ from shutil import copyfileobj
 from urllib.request import urlretrieve
 import polars as pl
 import pandas as pd
+import json
+
+
+title_file = "title.basics.tsv"
+ratings_file = "title.ratings.tsv"
+
+with open("./config.json") as conf_file:
+    config = json.load(conf_file)
 
 
 def download_imdb_dataset(url, output_path):
@@ -18,17 +26,18 @@ def download_imdb_dataset(url, output_path):
         remove(gz_file_path)
 
 
+# replace this with polars overwrite
 def remove_old_save_new_file(dataframe_to_write, file_path):
     if path.exists(file_path):
         remove(file_path)
     dataframe_to_write.write_parquet(file_path)
 
 
-def clean_title_data(file_path, schema, allowed_titles):
+def clean_title_data(file_path, schema):
 
     lf = (
         pl.scan_csv(
-            file_path,
+            title_file,
             separator="\t",
             null_values=r"\N",
             quote_char=None,
@@ -36,24 +45,53 @@ def clean_title_data(file_path, schema, allowed_titles):
         )
         # where startyear is None, replace it with last seen value
         .with_columns(pl.col("startYear").forward_fill())
-        .filter(pl.col("isAdult") == 0)
-        .filter(pl.col("titleType").is_in(allowed_titles))
-        .drop("originalTitle", "endYear", "isAdult")
-        .filter(pl.col("genres").is_not_null())
-        .with_columns(pl.col("genres").str.split(","))
-        # remove content with the genre "Adult"
-        .filter((pl.col("genres").list.contains("Adult")).not_())
-        .collect(streaming=True)
     )
 
-    remove_old_save_new_file(dataframe_to_write=lf, file_path=file_path)
+    blocked_titletypes_arr = config.get("blocked_titletypes")
+    if blocked_titletypes_arr and len(blocked_titletypes_arr) > 0:
+        # reverse the is_in using tilde operator
+        lf = lf.filter(~pl.col("titleType").is_in(blocked_titletypes_arr))
+
+    # if config.get("is_remove_adult") == True:
+    #     lf = lf.filter((pl.col("genres").list.contains("Adult")).not_()).filter(
+    #         pl.col("isAdult") == 0
+    #     )
+
+    if (
+        config.get("is_remove_adult") == True
+        and config.get("is_split_genres_into_reftable") == True
+    ):
+        print("hit")
+        lf = (
+            lf.filter(pl.col("genres").is_not_null())
+            .with_columns(pl.col("genres").str.split(","))
+            .filter((pl.col("genres").list.contains("Adult")).not_())
+            .filter(pl.col("isAdult") == 0)
+        )
+
+    elif (
+        config.get("is_remove_adult") == True
+        and config.get("is_split_genres_into_reftable") != True
+    ):
+        lf = lf.filter(pl.col("genres").str.split(",").list.contains("Adult")).not_()
+
+    # if config.get("is_split_genres_into_reftable"):
+    #     lf = lf.filter(pl.col("genres").is_not_null()).with_columns(
+    #         pl.col("genres").str.split(",")
+    #     )
+
+    lf = lf.drop("originalTitle", "endYear", "isAdult").collect()
+    remove_old_save_new_file(
+        dataframe_to_write=lf,
+        file_path=file_path,
+    )
 
 
 def join_title_ratings(title_path, ratings_path, ratings_schema):
     title_lf = pl.scan_parquet(title_path)
 
     ratings_lf = pl.scan_csv(
-        ratings_path,
+        ratings_file,
         separator="\t",
         null_values=r"\N",
         schema=ratings_schema,
@@ -86,7 +124,8 @@ def drop_genres_from_title(title_file_path):
 
 def change_str_to_int(df_file_path, column_name):
     df = pl.read_parquet(df_file_path)
-    unique_values = df[column_name].arr.explode().unique().to_list()
+    print(df.head(50))
+    unique_values = df[column_name].explode().unique().to_list()
     unique_values.sort()
     value_dict = {}
 
