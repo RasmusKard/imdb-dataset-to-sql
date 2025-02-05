@@ -1,4 +1,5 @@
 import polars as pl
+import sqlalchemy.types as sqltypes
 
 # DATA PREPROCESSING VARIABLES
 TITLE_FILE_PATH = "temp_file_title"
@@ -25,4 +26,23 @@ PL_RATINGS_SCHEMA = {
     "tconst": pl.String,
     "averageRating": pl.Float32,
     "numVotes": pl.UInt32,
+}
+
+IMDB_DATA_ALLOWED_COLUMNS = {
+    "tconst": sqltypes.String(20),
+    "titleType": sqltypes.String(20),
+    "primaryTitle": sqltypes.String(400),
+    "originalTitle": sqltypes.String(400),
+    "isAdult": sqltypes.SMALLINT(),
+    "startYear": sqltypes.SMALLINT(),
+    "endYear": sqltypes.SMALLINT(),
+    "runtimeMinutes": sqltypes.INT(),
+    "genres": sqltypes.String(40),
+    "averageRating": sqltypes.Float(),
+    "numVotes": sqltypes.INT(),
+}
+
+IMDB_DATA_ALLOWED_SPLIT_COLUMNS = {
+    "genres",
+    "titleType",
 }

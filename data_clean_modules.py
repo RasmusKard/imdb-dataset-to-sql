@@ -3,14 +3,13 @@ from os import path, remove
 from shutil import copyfileobj
 from urllib.request import urlretrieve
 import polars as pl
-import json
+import configs.default
 
 
 title_file = "title.basics.tsv"
 ratings_file = "title.ratings.tsv"
 
-with open("./config.json") as conf_file:
-    config = json.load(conf_file)
+SETTINGS = configs.default.config_dict.get("settings")
 
 
 def download_imdb_dataset(url, output_path):
@@ -29,7 +28,14 @@ def download_imdb_dataset(url, output_path):
 def remove_old_save_new_file(dataframe_to_write, file_path):
     if path.exists(file_path):
         remove(file_path)
-    dataframe_to_write.write_parquet(file_path)
+
+    dataframe_type = type(dataframe_to_write)
+    if dataframe_type == pl.DataFrame:
+        dataframe_to_write.write_parquet(file_path)
+    else:
+        raise Exception(
+            "Unexpected type found when trying to save DataFrame to Parquet file."
+        )
 
 
 def clean_title_data(file_path, schema):
@@ -48,15 +54,15 @@ def clean_title_data(file_path, schema):
         )
     )
 
-    blocked_titletypes_arr = config.get("blocked_titletypes")
+    blocked_titletypes_arr = SETTINGS.get("blocked_titletypes")
     if blocked_titletypes_arr:
         # reverse the is_in using tilde operator
         lf = lf.filter(~pl.col("titleType").is_in(blocked_titletypes_arr))
 
     # if config has both remove adult and split genres the operation can be done more efficiently
     if (
-        config.get("is_remove_adult") == True
-        and config.get("is_split_genres_into_reftable") == True
+        SETTINGS.get("is_remove_adult") == True
+        and SETTINGS.get("is_split_genres_into_reftable") == True
     ):
         lf = (
             lf.with_columns(pl.col("genres").str.split(","))
@@ -64,13 +70,15 @@ def clean_title_data(file_path, schema):
             .filter(pl.col("isAdult") == 0)
         )
     elif (
-        config.get("is_remove_adult") == True
-        and config.get("is_split_genres_into_reftable") != True
+        SETTINGS.get("is_remove_adult") == True
+        and SETTINGS.get("is_split_genres_into_reftable") != True
     ):
         lf = lf.filter(~pl.col("genres").str.split(",").list.contains("Adult"))
 
     remove_old_save_new_file(
-        dataframe_to_write=lf.drop("originalTitle", "endYear", "isAdult").collect(),
+        dataframe_to_write=lf.drop("originalTitle", "endYear", "isAdult").collect(
+            streaming=True
+        ),
         file_path=file_path,
     )
 

@@ -2,8 +2,8 @@ import data_clean_modules as dm
 import dataframe_to_mysql as dfsql
 import globals
 from os import path, remove
-import json
 from sqlalchemy import create_engine, inspect
+import configs.default
 
 # generate names for temp files here
 
@@ -12,11 +12,12 @@ from sqlalchemy import create_engine, inspect
 # dm.download_imdb_dataset(config.IMDB_TITLE_BASICS_URL, config.TITLE_FILE_PATH)
 # dm.download_imdb_dataset(config.IMDB_TITLE_RATINGS_URL, config.RATINGS_FILE_PATH)
 
-with open("./config.json") as conf_file:
-    CONFIG = json.load(conf_file)
+SELECTED_CONFIG = configs.default.config_dict
+SETTINGS = SELECTED_CONFIG.get("settings")
+TABLES = SELECTED_CONFIG.get("tables").items()
 
 
-sql_creds = CONFIG.get("database")
+sql_creds = SETTINGS.get("database")
 if not sql_creds:
     raise Exception("SQL credentials not found in config")
 
@@ -25,7 +26,7 @@ SQL_ENGINE = create_engine(
 )
 
 if (
-    not CONFIG.get("is_ignore_db_has_tables_warning")
+    not SETTINGS.get("is_ignore_db_has_tables_warning")
     and inspect(SQL_ENGINE).get_table_names()
 ):
     raise Exception(
@@ -45,7 +46,7 @@ dm.join_title_ratings(
 )
 
 
-if CONFIG.get("is_split_genres_into_reftable") == True:
+if SETTINGS.get("is_split_genres_into_reftable") == True:
 
     dm.create_genres_file_from_title_file(
         title_file_path=globals.TITLE_FILE_PATH,
@@ -69,24 +70,29 @@ if CONFIG.get("is_split_genres_into_reftable") == True:
 
 print("done cleaning")
 
-titleType_values = dm.change_str_to_int(
-    df_file_path=globals.TITLE_FILE_PATH, column_name="titleType"
-)
-
-
-dfsql.create_reference_table(
-    sql_engine=SQL_ENGINE,
-    value_dict=titleType_values,
-    column_name="titleType",
-)
+# titleType_values = dm.change_str_to_int(
+#     df_file_path=globals.TITLE_FILE_PATH, column_name="titleType"
+# )
+# dfsql.create_reference_table(
+#     sql_engine=SQL_ENGINE,
+#     value_dict=titleType_values,
+#     column_name="titleType",
+# )
 
 
 # title and ratings parquet files to sql tables
-dfsql.parquet_to_sql(
-    parquet_file_path=globals.TITLE_FILE_PATH,
-    table_name=globals.TITLE_TABLE_NAME,
-    sql_engine=SQL_ENGINE,
-)
+# dfsql.parquet_to_sql(
+#     parquet_file_path=globals.TITLE_FILE_PATH,
+#     table_name=globals.TITLE_TABLE_NAME,
+#     sql_engine=SQL_ENGINE,
+# )
+for table_name, table_dict in TABLES:
+    dfsql.table_to_sql(
+        base_parquet_path=globals.TITLE_FILE_PATH,
+        table_dict=table_dict,
+        table_name=table_name,
+        sql_engine=SQL_ENGINE,
+    )
 
 
 # for file_path in [globals.TITLE_FILE_PATH, globals.GENRES_FILE_PATH]:
