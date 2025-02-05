@@ -1,7 +1,9 @@
 import polars as pl
+import pandas as pd
 from sqlalchemy.types import String
 import globals
 import os.path
+import uuid
 
 
 def create_reference_table(sql_engine, value_dict, column_name):
@@ -30,7 +32,12 @@ def join_parquet_files_to_df(column_list, tmpdir):
         lf_arr.append(pl.scan_parquet(path))
 
     lf = pl.concat(lf_arr, how="align")
-    print(lf.collect().head())
+
+    file_name = str(uuid.uuid4())
+    file_path = os.path.join(tmpdir, file_name)
+    lf.sink_parquet(file_path)
+
+    return file_path
 
 
 def table_to_sql(tmpdir, table_dict, table_name, sql_engine, settings):
@@ -60,15 +67,15 @@ def table_to_sql(tmpdir, table_dict, table_name, sql_engine, settings):
             new_dtype_dict[new_column_name] = ALLOWED_COLUMNS[imdb_column_name]
         values_to_grab[imdb_column_name] = new_column_name
 
-    join_parquet_files_to_df(column_list=values_to_grab.keys(), tmpdir=tmpdir)
-    # path_arr = [os.path.join(tmpdir, column) for column in values_to_grab.keys()]
-    # df = pl.read_parquet(path_arr).rename(columns=values_to_grab)
-
-    # df.to_sql(
-    #     name=table_name,
-    #     con=sql_engine,
-    #     if_exists="replace",
-    #     chunksize=10000,
-    #     index=False,
-    #     dtype=new_dtype_dict,
-    # )
+    parquet_path = join_parquet_files_to_df(
+        column_list=values_to_grab.keys(), tmpdir=tmpdir
+    )
+    df = pd.read_parquet(parquet_path).rename(columns=values_to_grab)
+    df.to_sql(
+        name=table_name,
+        con=sql_engine,
+        if_exists="replace",
+        chunksize=10000,
+        index=False,
+        dtype=new_dtype_dict,
+    )

@@ -29,7 +29,7 @@ config_dict = {
     },
     "settings": {
         "blocked_genres": ["Horror", "Musical"],
-        "blocked_titletypes": ["short", "video"],
+        "blocked_titletypes": ["short", "video", "tvEpisode"],
         "database": {
             "host": "localhost",
             "port": 3306,

@@ -5,6 +5,7 @@ from urllib.request import urlretrieve
 import polars as pl
 import configs.default
 import os.path
+import uuid
 
 
 title_file = "title.basics.tsv"
@@ -42,7 +43,6 @@ def remove_old_save_new_file(dataframe_to_write, file_path):
 
 def split_columns_into_files(tmpdir, lf):
     df = lf.collect(streaming=IS_STREAMING)
-    print(df.head())
     column_list = df.columns
     column_list.remove("tconst")
 
@@ -119,23 +119,32 @@ def drop_genres_from_title(title_file_path):
     remove_old_save_new_file(dataframe_to_write=lf, file_path=title_file_path)
 
 
-def change_str_to_int(file_path, column_name):
+def change_str_to_int(tmpdir, column_name):
 
-    df = pl.read_parquet(file_path)
+    file_path = os.path.join(tmpdir, column_name)
+    df = (
+        pl.scan_parquet(file_path)
+        .with_columns(pl.col(column_name).str.split(","))
+        .explode(column_name)
+    ).collect(streaming=IS_STREAMING)
 
-    unique_values = df[column_name].explode().unique().to_list()
+    unique_values = df[column_name].unique().to_list()
     unique_values.sort()
     value_dict = {}
 
     for counter, value in enumerate(unique_values):
         value_dict[value] = counter
 
-    print(df.head())
     df = df.with_columns(
         pl.col(column_name)
-        .str.split(",")
         .cast(pl.String)
         .replace_strict(value_dict, return_dtype=pl.UInt8)
     )
 
-    return df
+    tempfile_name = str(uuid.uuid4())
+    tempfile_path = os.path.join(tmpdir, tempfile_name)
+
+    df.write_parquet(tempfile_path)
+    os.replace(tempfile_path, file_path)
+
+    return value_dict

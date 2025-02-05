@@ -8,6 +8,7 @@ import tempfile
 import os.path
 import os
 import polars as pl
+import sqlalchemy.types as sqltypes
 
 # generate names for temp files here
 
@@ -16,9 +17,7 @@ with tempfile.TemporaryDirectory() as tmpdir:
     MAIN_FILE = "title_file"
     RATINGS_FILE = "ratings_file"
     # Download ratings and title files from IMDb
-    # dm.download_imdb_dataset(
-    #     config.IMDB_TITLE_BASICS_URL, os.path.join(tmpdir, MAIN_FILE)
-    # )
+    # dm.download_imdb_dataset(globals.IMDB_TITLE_BASICS_URL, "title.basics.tsv")
     # dm.download_imdb_dataset(
     #     config.IMDB_TITLE_RATINGS_URL, os.path.join(tmpdir, RATINGS_FILE)
     # )
@@ -26,6 +25,12 @@ with tempfile.TemporaryDirectory() as tmpdir:
     SELECTED_CONFIG = configs.default.config_dict
     SETTINGS = SELECTED_CONFIG.get("settings")
     TABLES = SELECTED_CONFIG.get("tables").items()
+
+    if SETTINGS.get("is_split_genres_into_reftable"):
+        globals.IMDB_DATA_ALLOWED_COLUMNS["genres"] = sqltypes.SMALLINT()
+
+    if SETTINGS.get("is_convert_title_type_str_to_int"):
+        globals.IMDB_DATA_ALLOWED_COLUMNS["titleType"] = sqltypes.SMALLINT()
 
     IS_STREAMING = SETTINGS.get("use_streaming")
 
@@ -74,10 +79,9 @@ with tempfile.TemporaryDirectory() as tmpdir:
         # dm.drop_genres_from_title(title_file_path=globals.TITLE_FILE_PATH)
 
         genres_column_name = "genres"
-        genres_file_path = os.path.join(tmpdir, genres_column_name)
 
         genres_values = dm.change_str_to_int(
-            file_path=genres_file_path,
+            tmpdir=tmpdir,
             column_name=genres_column_name,
         )
 
@@ -86,8 +90,6 @@ with tempfile.TemporaryDirectory() as tmpdir:
             value_dict=genres_values,
             column_name=genres_column_name,
         )
-
-    print("done cleaning")
 
     if SETTINGS.get("is_convert_title_type_str_to_int"):
         titleType_values = dm.change_str_to_int(
@@ -100,12 +102,6 @@ with tempfile.TemporaryDirectory() as tmpdir:
             column_name="titleType",
         )
 
-    # title and ratings parquet files to sql tables
-    # dfsql.parquet_to_sql(
-    #     parquet_file_path=globals.TITLE_FILE_PATH,
-    #     table_name=globals.TITLE_TABLE_NAME,
-    #     sql_engine=SQL_ENGINE,
-    # )
     for table_name, table_dict in TABLES:
         dfsql.table_to_sql(
             tmpdir=tmpdir,
@@ -114,7 +110,3 @@ with tempfile.TemporaryDirectory() as tmpdir:
             sql_engine=SQL_ENGINE,
             settings=SETTINGS,
         )
-
-    # for file_path in [globals.TITLE_FILE_PATH, globals.GENRES_FILE_PATH]:
-    #     if path.exists(file_path):
-    #         remove(file_path)
