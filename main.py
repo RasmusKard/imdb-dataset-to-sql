@@ -4,97 +4,117 @@ import globals
 from os import path, remove
 from sqlalchemy import create_engine, inspect
 import configs.default
+import tempfile
+import os.path
+import os
+import polars as pl
 
 # generate names for temp files here
 
+with tempfile.TemporaryDirectory() as tmpdir:
 
-# Download ratings and title files from IMDb
-# dm.download_imdb_dataset(config.IMDB_TITLE_BASICS_URL, config.TITLE_FILE_PATH)
-# dm.download_imdb_dataset(config.IMDB_TITLE_RATINGS_URL, config.RATINGS_FILE_PATH)
+    MAIN_FILE = "title_file"
+    RATINGS_FILE = "ratings_file"
+    # Download ratings and title files from IMDb
+    # dm.download_imdb_dataset(
+    #     config.IMDB_TITLE_BASICS_URL, os.path.join(tmpdir, MAIN_FILE)
+    # )
+    # dm.download_imdb_dataset(
+    #     config.IMDB_TITLE_RATINGS_URL, os.path.join(tmpdir, RATINGS_FILE)
+    # )
 
-SELECTED_CONFIG = configs.default.config_dict
-SETTINGS = SELECTED_CONFIG.get("settings")
-TABLES = SELECTED_CONFIG.get("tables").items()
+    SELECTED_CONFIG = configs.default.config_dict
+    SETTINGS = SELECTED_CONFIG.get("settings")
+    TABLES = SELECTED_CONFIG.get("tables").items()
 
+    IS_STREAMING = SETTINGS.get("use_streaming")
 
-sql_creds = SETTINGS.get("database")
-if not sql_creds:
-    raise Exception("SQL credentials not found in config")
+    sql_creds = SETTINGS.get("database")
+    if not sql_creds:
+        raise Exception("SQL credentials not found in config")
 
-SQL_ENGINE = create_engine(
-    f"mysql+mysqlconnector://{sql_creds["user"]}:{sql_creds["password"]}@{sql_creds["host"]}:{sql_creds["port"]}/{sql_creds["database"]}"
-)
-
-if (
-    not SETTINGS.get("is_ignore_db_has_tables_warning")
-    and inspect(SQL_ENGINE).get_table_names()
-):
-    raise Exception(
-        "Given database already has tables, cancelling operation.\n"
-        "If you'd like to ignore this warning and continue then change `is_ignore_db_has_tables_warning` in config.json. (It's recommended to make a back-up of your data before doing this.)"
+    SQL_ENGINE = create_engine(
+        f"mysql+mysqlconnector://{sql_creds["user"]}:{sql_creds["password"]}@{sql_creds["host"]}:{sql_creds["port"]}/{sql_creds["database"]}"
     )
 
-dm.clean_title_data(
-    file_path=globals.TITLE_FILE_PATH,
-    schema=globals.PL_TITLE_SCHEMA,
-)
+    if (
+        not SETTINGS.get("is_ignore_db_has_tables_warning")
+        and inspect(SQL_ENGINE).get_table_names()
+    ):
+        raise Exception(
+            "Given database already has tables, cancelling operation.\n"
+            "If you'd like to ignore this warning and continue then change `is_ignore_db_has_tables_warning` in config.json. (It's recommended to make a back-up of your data before doing this.)"
+        )
 
-dm.join_title_ratings(
-    title_path=globals.TITLE_FILE_PATH,
-    ratings_path=globals.RATINGS_FILE_PATH,
-    ratings_schema=globals.PL_RATINGS_SCHEMA,
-)
-
-
-if SETTINGS.get("is_split_genres_into_reftable") == True:
-
-    dm.create_genres_file_from_title_file(
-        title_file_path=globals.TITLE_FILE_PATH,
-        genres_file_path=globals.GENRES_FILE_PATH,
+    lf = dm.clean_title_data(
+        file_path=globals.TITLE_FILE_PATH,
+        schema=globals.PL_TITLE_SCHEMA,
     )
 
-    dm.drop_genres_from_title(title_file_path=globals.TITLE_FILE_PATH)
-
-    genres_values = dm.change_str_to_int(
-        df_file_path=globals.GENRES_FILE_PATH, column_name="genres"
+    lf = dm.join_title_ratings(
+        title_lf=lf,
+        ratings_path=globals.RATINGS_FILE_PATH,
+        ratings_schema=globals.PL_RATINGS_SCHEMA,
     )
 
-    dfsql.create_reference_table(
-        sql_engine=SQL_ENGINE, value_dict=genres_values, column_name="genres"
-    )
-    dfsql.parquet_to_sql(
-        parquet_file_path=globals.GENRES_FILE_PATH,
-        table_name=globals.GENRES_TABLE_NAME,
-        sql_engine=SQL_ENGINE,
-    )
+    dm.split_columns_into_files(tmpdir=tmpdir, lf=lf)
 
-print("done cleaning")
+    # create temp folder
+    # do cleaning in that folder
+    # once cleaning is done split files into tconst:other_column files
+    #
 
-# titleType_values = dm.change_str_to_int(
-#     df_file_path=globals.TITLE_FILE_PATH, column_name="titleType"
-# )
-# dfsql.create_reference_table(
-#     sql_engine=SQL_ENGINE,
-#     value_dict=titleType_values,
-#     column_name="titleType",
-# )
+    if SETTINGS.get("is_split_genres_into_reftable") == True:
 
+        # dm.create_genres_file_from_title_file(
+        #     title_file_path=globals.TITLE_FILE_PATH,
+        #     genres_file_path=globals.GENRES_FILE_PATH,
+        # )
 
-# title and ratings parquet files to sql tables
-# dfsql.parquet_to_sql(
-#     parquet_file_path=globals.TITLE_FILE_PATH,
-#     table_name=globals.TITLE_TABLE_NAME,
-#     sql_engine=SQL_ENGINE,
-# )
-for table_name, table_dict in TABLES:
-    dfsql.table_to_sql(
-        base_parquet_path=globals.TITLE_FILE_PATH,
-        table_dict=table_dict,
-        table_name=table_name,
-        sql_engine=SQL_ENGINE,
-    )
+        # dm.drop_genres_from_title(title_file_path=globals.TITLE_FILE_PATH)
 
+        genres_column_name = "genres"
+        genres_file_path = os.path.join(tmpdir, genres_column_name)
 
-# for file_path in [globals.TITLE_FILE_PATH, globals.GENRES_FILE_PATH]:
-#     if path.exists(file_path):
-#         remove(file_path)
+        genres_values = dm.change_str_to_int(
+            file_path=genres_file_path,
+            column_name=genres_column_name,
+        )
+
+        dfsql.create_reference_table(
+            sql_engine=SQL_ENGINE,
+            value_dict=genres_values,
+            column_name=genres_column_name,
+        )
+
+    print("done cleaning")
+
+    if SETTINGS.get("is_convert_title_type_str_to_int"):
+        titleType_values = dm.change_str_to_int(
+            df_file_path=globals.TITLE_FILE_PATH, column_name="titleType"
+        )
+
+        dfsql.create_reference_table(
+            sql_engine=SQL_ENGINE,
+            value_dict=titleType_values,
+            column_name="titleType",
+        )
+
+    # title and ratings parquet files to sql tables
+    # dfsql.parquet_to_sql(
+    #     parquet_file_path=globals.TITLE_FILE_PATH,
+    #     table_name=globals.TITLE_TABLE_NAME,
+    #     sql_engine=SQL_ENGINE,
+    # )
+    for table_name, table_dict in TABLES:
+        dfsql.table_to_sql(
+            tmpdir=tmpdir,
+            table_dict=table_dict,
+            table_name=table_name,
+            sql_engine=SQL_ENGINE,
+            settings=SETTINGS,
+        )
+
+    # for file_path in [globals.TITLE_FILE_PATH, globals.GENRES_FILE_PATH]:
+    #     if path.exists(file_path):
+    #         remove(file_path)

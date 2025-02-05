@@ -1,6 +1,7 @@
-import pandas as pd
+import polars as pl
 from sqlalchemy.types import String
 import globals
+import os.path
 
 
 def create_reference_table(sql_engine, value_dict, column_name):
@@ -19,7 +20,20 @@ def create_reference_table(sql_engine, value_dict, column_name):
     )
 
 
-def table_to_sql(base_parquet_path, table_dict, table_name, sql_engine):
+def join_parquet_files_to_df(column_list, tmpdir):
+    path_arr = [
+        os.path.join(tmpdir, column) for column in column_list if column != "tconst"
+    ]
+
+    lf_arr = []
+    for path in path_arr:
+        lf_arr.append(pl.scan_parquet(path))
+
+    lf = pl.concat(lf_arr, how="align")
+    print(lf.collect().head())
+
+
+def table_to_sql(tmpdir, table_dict, table_name, sql_engine, settings):
     values_dict = table_dict.get("values")
     if not values_dict:
         raise Exception("`values` empty in `tables`")
@@ -46,15 +60,15 @@ def table_to_sql(base_parquet_path, table_dict, table_name, sql_engine):
             new_dtype_dict[new_column_name] = ALLOWED_COLUMNS[imdb_column_name]
         values_to_grab[imdb_column_name] = new_column_name
 
-    df = pd.read_parquet(base_parquet_path, columns=list(values_to_grab.keys())).rename(
-        columns=values_to_grab
-    )
+    join_parquet_files_to_df(column_list=values_to_grab.keys(), tmpdir=tmpdir)
+    # path_arr = [os.path.join(tmpdir, column) for column in values_to_grab.keys()]
+    # df = pl.read_parquet(path_arr).rename(columns=values_to_grab)
 
-    df.to_sql(
-        name=table_name,
-        con=sql_engine,
-        if_exists="replace",
-        chunksize=10000,
-        index=False,
-        dtype=new_dtype_dict,
-    )
+    # df.to_sql(
+    #     name=table_name,
+    #     con=sql_engine,
+    #     if_exists="replace",
+    #     chunksize=10000,
+    #     index=False,
+    #     dtype=new_dtype_dict,
+    # )

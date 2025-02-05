@@ -5,8 +5,6 @@ import sqlalchemy.types as sqltypes
 TITLE_FILE_PATH = "temp_file_title"
 RATINGS_FILE_PATH = "temp_file_ratings"
 GENRES_FILE_PATH = "temp_file_genres"
-TITLE_TABLE_NAME = "title"
-GENRES_TABLE_NAME = "title_genres"
 
 IMDB_TITLE_BASICS_URL = "https://datasets.imdbws.com/title.basics.tsv.gz"
 IMDB_TITLE_RATINGS_URL = "https://datasets.imdbws.com/title.ratings.tsv.gz"

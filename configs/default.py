@@ -23,6 +23,7 @@ config_dict = {
                 "tconst": "movieID",
                 "titleType": "titleType",
                 "genres": "genres",
+                "runtimeMinutes": "runtimeMinutes",
             }
         },
     },
@@ -37,7 +38,7 @@ config_dict = {
             "database": "dataset_sql",
         },
         # split the comma separated genres string and convert it to an int with a lookup table
-        "is_split_genres_into_reftable": False,
+        "is_split_genres_into_reftable": True,
         # convert to int for lookup table creation
         "is_convert_title_type_str_to_int": False,
         "is_remove_adult": True,
