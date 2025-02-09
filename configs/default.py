@@ -8,28 +8,31 @@ import sqlalchemy.types as dtype
 
 config_dict = {
     "tables": {
-        "title": {
-            # dtype key should match a `column_name`
-            "dtypes": {"movieID": dtype.String(50)},
-            "values": {
-                # imdb_dataset_value_column : column_name
-                "tconst": "movieID",
-            },
-        },
         "bruhtable": {
+            "dtypes": {"hahahahaa": dtype.INTEGER()},
             "values": {
                 # imdb_dataset_value_column : column_name
                 "tconst": "movieID",
                 "titleType": "titleType",
                 "runtimeMinutes": "runtimeMinutes",
                 "numVotes": "numVotes",
-            }
+                "genres": "hahahahaa",
+            },
+        },
+        "title": {
+            # dtype key should match a `column_name`
+            "dtypes": {"movieID": dtype.String(20)},
+            "values": {
+                # imdb_dataset_value_column : column_name
+                "tconst": "movieID",
+                "genres": "Genres",
+            },
         },
     },
     "settings": {
         "blocked_genres": ["Horror", "Musical", "Short"],
         "blocked_titletypes": {"tvEpisode", "videoGame", "tvShort"},
-        "columns_to_drop": {},
+        "columns_to_drop": {"isAdult", "endYear", "originalTitle"},
         "database": {
             "host": "localhost",
             "port": 3306,

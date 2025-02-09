@@ -77,13 +77,6 @@ with tempfile.TemporaryDirectory() as tmpdir:
     df.write_parquet(MAIN_FILE_PATH)
     del df
 
-    # dm.split_columns_into_files(tmpdir=tmpdir, lf=lf)
-
-    # create temp folder
-    # do cleaning in that folder
-    # once cleaning is done split files into tconst:other_column files
-    #
-
     if SETTINGS.get("is_split_genres_into_reftable") == True:
 
         genres_column_name = "genres"
@@ -123,4 +116,5 @@ with tempfile.TemporaryDirectory() as tmpdir:
             sql_engine=SQL_ENGINE,
             main_file_path=MAIN_FILE_PATH,
             genres_file_path=GENRES_FILE_PATH,
+            settings=SETTINGS,
         )
