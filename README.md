@@ -11,16 +11,12 @@ Main opinionated choices:
 1. Download gzip files for `title` and `ratings` from IMDb
 1. Initialize `settings` and SQL engine
 1. Clean `title` data
-   - Remove blocked `titleType`'s outlined in `settings`
+   - Remove blocked `titleType`s and `genres` outlined in `settings`
    - Remove `isAdult` if set to `True` in `settings`
-   -
-
-option a
-
-separate all columns into different parquet files
-join them when needed
-
-option b
-keep everything in one file and when reading only select needed columns
-if user has enabled rating column split then generate a second file and join it if needed
-(add a warning for it being a bad idea due to duplication of tconst)
+   - Drop columns outlined in `settings`
+   - If `startYear` is `NULL` then use the last seen value
+   - Remove rows where `genres` is `NULL`
+1. Join `ratings` file with cleaned `title` file
+1. Split `genres` column from comma-separated string to list and explode it into separate rows (if enabled in `settings`). This also converts the genres value to `int` and creates a ref-table with the corresponding string values.
+1. Convert `titleType`s to `int` and create ref-table (if enabled in `settings`)
+1. Parse table info outlined in `settings` and use the cleaned data to create the tables based on it
