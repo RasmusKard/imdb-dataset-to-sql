@@ -1,63 +1,117 @@
-import data_clean_modules as dm
-import dataframe_to_mysql as dfsql
-import config
+import modules.data_clean_modules as dm
+import modules.dataframe_to_mysql as dfsql
+import globals
 from os import path, remove
+from sqlalchemy import create_engine, inspect
+import configs.default
+import tempfile
+import sqlalchemy.types as sqltypes
+from modules.helpers import join_path_with_random_uuid, download_imdb_dataset
+from typing import Any
+
+# generate names for temp files here
 
 
-dm.download_imdb_dataset(config.IMDB_TITLE_BASICS_URL, config.TITLE_FILE_PATH)
-dm.download_imdb_dataset(config.IMDB_TITLE_RATINGS_URL, config.RATINGS_FILE_PATH)
+with tempfile.TemporaryDirectory() as tmpdir:
 
-dm.clean_title_data(
-    file_path=config.TITLE_FILE_PATH,
-    schema=config.PL_TITLE_SCHEMA,
-    allowed_titles=config.ALLOWED_TITLETYPES,
-)
+    MAIN_FILE_PATH = join_path_with_random_uuid(tmpdir)
+    RATINGS_FILE_PATH = join_path_with_random_uuid(tmpdir)
+    GENRES_FILE_PATH = join_path_with_random_uuid(tmpdir)
 
-dm.join_title_ratings(
-    title_path=config.TITLE_FILE_PATH,
-    ratings_path=config.RATINGS_FILE_PATH,
-    ratings_schema=config.PL_RATINGS_SCHEMA,
-)
+    # Download ratings and title files from IMDb
+    download_imdb_dataset(globals.IMDB_TITLE_BASICS_URL, MAIN_FILE_PATH)
+    download_imdb_dataset(globals.IMDB_TITLE_RATINGS_URL, RATINGS_FILE_PATH)
 
-dm.create_genres_file_from_title_file(
-    title_file_path=config.TITLE_FILE_PATH, genres_file_path=config.GENRES_FILE_PATH
-)
+    SELECTED_CONFIG: dict[str, Any] = configs.default.config_dict
+    SETTINGS: dict | None = SELECTED_CONFIG.get("settings")
+    if not SETTINGS:
+        raise Exception(
+            "`settings`not found in config dict. Config is incomplete or incorrectly formatted."
+        )
+    TABLES: dict | None = SELECTED_CONFIG.get("tables")
+    if not TABLES:
+        raise Exception(
+            "`tables` not found in config dict. Config is incomplete or incorrectly formatted."
+        )
 
-dm.drop_genres_from_title(title_file_path=config.TITLE_FILE_PATH)
+    IS_STREAMING = SETTINGS.get("use_streaming")
 
-titleType_values = dm.change_str_to_int(
-    df_file_path=config.TITLE_FILE_PATH, column_name="titleType"
-)
+    sql_creds = SETTINGS.get("database")
+    if not sql_creds:
+        raise Exception("SQL credentials not found in config")
 
-dfsql.create_reference_table(
-    sql_engine=config.MYSQL_ENGINE, value_dict=titleType_values, column_name="titleType"
-)
+    SQL_ENGINE = create_engine(
+        f"mysql+mysqlconnector://{sql_creds["user"]}:{sql_creds["password"]}@{sql_creds["host"]}:{sql_creds["port"]}/{sql_creds["database"]}"
+    )
 
-genres_values = dm.change_str_to_int(
-    df_file_path=config.GENRES_FILE_PATH, column_name="genres"
-)
+    if (
+        not SETTINGS.get("is_ignore_db_has_tables_warning")
+        and inspect(SQL_ENGINE).get_table_names()
+    ):
+        raise Exception(
+            "Given database already has tables, cancelling operation.\n"
+            "If you'd like to ignore this warning and continue then change `is_ignore_db_has_tables_warning` to `true` in config.json. (It's recommended to make a back-up of your data before doing this.)"
+        )
 
-dfsql.create_reference_table(
-    sql_engine=config.MYSQL_ENGINE, value_dict=genres_values, column_name="genres"
-)
+    lf = dm.clean_title_data(
+        file_path=MAIN_FILE_PATH,
+        schema=globals.PL_TITLE_SCHEMA,
+    )
 
+    lf = dm.join_title_ratings(
+        title_lf=lf,
+        ratings_path=RATINGS_FILE_PATH,
+        ratings_schema=globals.PL_RATINGS_SCHEMA,
+    )
 
-dfsql.title_data_to_sql(
-    title_table_creation_sql=config.TITLE_TABLE_CREATION_SQL,
-    title_table_drop_sql=config.TITLE_TABLE_DROP_SQL,
-    title_file_path=config.TITLE_FILE_PATH,
-    title_table_name=config.TITLE_TABLE_NAME,
-    sql_engine=config.MYSQL_ENGINE,
-)
+    df = lf.collect(streaming=IS_STREAMING)
+    df.write_parquet(MAIN_FILE_PATH)
+    del df
 
-dfsql.genre_data_to_sql(
-    genres_table_drop_sql=config.GENRES_TABLE_DROP_SQL,
-    genres_table_creation_sql=config.GENRES_TABLE_CREATION_SQL,
-    genres_file_path=config.GENRES_FILE_PATH,
-    genres_table_name=config.GENRES_TABLE_NAME,
-    sql_engine=config.MYSQL_ENGINE,
-)
+    if SETTINGS.get("is_split_genres_into_reftable") == True:
 
-for file_path in [config.TITLE_FILE_PATH, config.GENRES_FILE_PATH]:
-    if path.exists(file_path):
-        remove(file_path)
+        globals.IMDB_DATA_ALLOWED_COLUMNS["genres"] = sqltypes.SMALLINT()
+
+        genres_column_name = "genres"
+
+        dm.create_genres_file_from_title_file(
+            main_file_path=MAIN_FILE_PATH,
+            genres_file_path=GENRES_FILE_PATH,
+            tmpdir=tmpdir,
+            column_name=genres_column_name,
+        )
+
+        dm.drop_genres_from_title(main_file_path=MAIN_FILE_PATH)
+
+        genres_values = dm.change_str_to_int(
+            column_name=genres_column_name, file_path=GENRES_FILE_PATH
+        )
+
+        dfsql.create_reference_table(
+            sql_engine=SQL_ENGINE,
+            value_dict=genres_values,
+            column_name=genres_column_name,
+        )
+
+    if SETTINGS.get("is_convert_title_type_str_to_int"):
+        globals.IMDB_DATA_ALLOWED_COLUMNS["titleType"] = sqltypes.SMALLINT()
+
+        titleType_values = dm.change_str_to_int(
+            column_name="titleType", file_path=MAIN_FILE_PATH
+        )
+
+        dfsql.create_reference_table(
+            sql_engine=SQL_ENGINE,
+            value_dict=titleType_values,
+            column_name="titleType",
+        )
+
+    for table_name, table_dict in TABLES.items():
+        dfsql.table_to_sql(
+            table_dict=table_dict,
+            table_name=table_name,
+            sql_engine=SQL_ENGINE,
+            main_file_path=MAIN_FILE_PATH,
+            genres_file_path=GENRES_FILE_PATH,
+            settings=SETTINGS,
+        )
