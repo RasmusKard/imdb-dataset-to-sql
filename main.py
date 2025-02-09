@@ -34,12 +34,6 @@ with tempfile.TemporaryDirectory() as tmpdir:
             "`tables` not found in config dict. Config is incomplete or incorrectly formatted."
         )
 
-    if SETTINGS.get("is_split_genres_into_reftable"):
-        globals.IMDB_DATA_ALLOWED_COLUMNS["genres"] = sqltypes.SMALLINT()
-
-    if SETTINGS.get("is_convert_title_type_str_to_int"):
-        globals.IMDB_DATA_ALLOWED_COLUMNS["titleType"] = sqltypes.SMALLINT()
-
     IS_STREAMING = SETTINGS.get("use_streaming")
 
     sql_creds = SETTINGS.get("database")
@@ -76,6 +70,8 @@ with tempfile.TemporaryDirectory() as tmpdir:
 
     if SETTINGS.get("is_split_genres_into_reftable") == True:
 
+        globals.IMDB_DATA_ALLOWED_COLUMNS["genres"] = sqltypes.SMALLINT()
+
         genres_column_name = "genres"
 
         dm.create_genres_file_from_title_file(
@@ -98,6 +94,8 @@ with tempfile.TemporaryDirectory() as tmpdir:
         )
 
     if SETTINGS.get("is_convert_title_type_str_to_int"):
+        globals.IMDB_DATA_ALLOWED_COLUMNS["titleType"] = sqltypes.SMALLINT()
+
         titleType_values = dm.change_str_to_int(
             column_name="titleType", file_path=MAIN_FILE_PATH
         )
