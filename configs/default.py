@@ -13,7 +13,6 @@ config_dict = {
             "values": {
                 # imdb_dataset_value_column : new_column_name
                 "tconst": "movieID",
-                "titleType": "titleType",
                 "genres": "genres",
             },
         },
@@ -22,14 +21,15 @@ config_dict = {
                 # imdb_dataset_value_column : new_column_name
                 "tconst": "movieID",
                 "titleType": "titleType",
-                "genres": "genres",
                 "runtimeMinutes": "runtimeMinutes",
+                "numVotes": "numVotes",
             }
         },
     },
     "settings": {
-        "blocked_genres": ["Horror", "Musical"],
-        "blocked_titletypes": ["short", "video", "tvEpisode"],
+        "blocked_genres": ["Horror", "Musical", "Short"],
+        "blocked_titletypes": {"tvEpisode", "videoGame", "tvShort"},
+        "columns_to_drop": {},
         "database": {
             "host": "localhost",
             "port": 3306,

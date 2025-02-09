@@ -11,8 +11,10 @@ import uuid
 title_file = "title.basics.tsv"
 ratings_file = "title.ratings.tsv"
 
-SETTINGS = configs.default.config_dict.get("settings")
-IS_STREAMING = SETTINGS.get("use_streaming")
+SETTINGS: dict | None = configs.default.config_dict.get("settings")
+if not SETTINGS:
+    raise Exception("Settings not found")
+IS_STREAMING = SETTINGS.get("use_streaming") or False
 
 
 def download_imdb_dataset(url, output_path):
@@ -29,26 +31,29 @@ def download_imdb_dataset(url, output_path):
 
 # replace this with polars overwrite
 def remove_old_save_new_file(dataframe_to_write, file_path):
-    if path.exists(file_path):
-        remove(file_path)
+    # if path.exists(file_path):
+    #     remove(file_path)
 
     dataframe_type = type(dataframe_to_write)
     if dataframe_type == pl.DataFrame:
         dataframe_to_write.write_parquet(file_path)
+    elif dataframe_type == pl.LazyFrame:
+        dataframe_to_write.sink_parquet(file_path)
     else:
         raise Exception(
             "Unexpected type found when trying to save DataFrame to Parquet file."
         )
 
 
-def split_columns_into_files(tmpdir, lf):
-    df = lf.collect(streaming=IS_STREAMING)
-    column_list = df.columns
-    column_list.remove("tconst")
+# def split_columns_into_files(tmpdir, lf):
+#     df = lf.collect(streaming=IS_STREAMING)
 
-    for column in column_list:
-        temp_df = df.select(["tconst", column])
-        temp_df.write_parquet(os.path.join(tmpdir, column))
+#     column_list = df.columns
+#     column_list.remove("tconst")
+
+#     for column in column_list:
+#         temp_df = df.select(["tconst", column])
+#         temp_df.write_parquet(os.path.join(tmpdir, column))
 
 
 def clean_title_data(file_path, schema):
@@ -67,21 +72,33 @@ def clean_title_data(file_path, schema):
         )
     )
 
-    blocked_titletypes_arr = SETTINGS.get("blocked_titletypes")
-    if blocked_titletypes_arr:
+    blocked_titletypes_set = SETTINGS.get("blocked_titletypes")
+    if blocked_titletypes_set:
         # reverse the is_in using tilde operator
-        lf = lf.filter(~pl.col("titleType").is_in(blocked_titletypes_arr))
+        lf = lf.filter(~pl.col("titleType").is_in(blocked_titletypes_set))
 
+    # add adult to blocked genres based on `settings` bool and remove rows based on `isAdult`
+    blocked_genres_list = SETTINGS.get("blocked_genres")
     if SETTINGS.get("is_remove_adult") == True:
-        lf = lf.filter(~pl.col("genres").str.split(",").list.contains("Adult"))
+        if blocked_genres_list:
+            blocked_genres_list.append("Adult")
+        else:
+            blocked_genres_list = {"Adult"}
+        lf = lf.filter(pl.col("isAdult") == 0)
 
-    return lf.drop("originalTitle", "endYear", "isAdult")
-    # remove_old_save_new_file(
-    #     dataframe_to_write=lf.drop("originalTitle", "endYear", "isAdult").collect(
-    #         streaming=True
-    #     ),
-    #     file_path=file_path,
-    # )
+    # remove blocked genres
+    if blocked_genres_list:
+
+        lf = lf.filter(
+            pl.col("genres")
+            .str.split(",")
+            .list.set_intersection(blocked_genres_list)
+            .list.len()
+            .eq(0)
+        )
+
+    col_drop_arr = SETTINGS.get("columns_to_drop") or []
+    return lf.drop(col_drop_arr)
 
 
 def join_title_ratings(title_lf, ratings_path, ratings_schema):
@@ -102,31 +119,34 @@ def join_title_ratings(title_lf, ratings_path, ratings_schema):
     return title_lf
 
 
-def create_genres_file_from_title_file(title_file_path, genres_file_path):
-    lf = pl.scan_parquet(title_file_path).explode("genres").select(["tconst", "genres"])
+def create_genres_file_from_title_file(
+    main_file_path, genres_file_path, tmpdir, column_name
+):
 
-    blocked_genres_arr = SETTINGS.get("blocked_genres")
-    if blocked_genres_arr and len(blocked_genres_arr) > 0:
-        # reverse the is_in using tilde operator
-        lf = lf.filter(~pl.col("genres").is_in(blocked_genres_arr))
-    remove_old_save_new_file(
-        dataframe_to_write=lf.collect(streaming=True), file_path=genres_file_path
-    )
-
-
-def drop_genres_from_title(title_file_path):
-    lf = pl.scan_parquet(title_file_path).drop("genres").collect(streaming=True)
-    remove_old_save_new_file(dataframe_to_write=lf, file_path=title_file_path)
-
-
-def change_str_to_int(tmpdir, column_name):
-
-    file_path = os.path.join(tmpdir, column_name)
-    df = (
-        pl.scan_parquet(file_path)
+    lf = (
+        pl.scan_parquet(main_file_path)
         .with_columns(pl.col(column_name).str.split(","))
         .explode(column_name)
-    ).collect(streaming=IS_STREAMING)
+        .select(["tconst", column_name])
+    )
+
+    genres_file_path = os.path.join(tmpdir, genres_file_path)
+
+    lf.sink_parquet(genres_file_path)
+
+
+def drop_genres_from_title(main_file_path):
+
+    lf = pl.scan_parquet(main_file_path).drop("genres").collect(streaming=IS_STREAMING)
+    remove_old_save_new_file(dataframe_to_write=lf, file_path=main_file_path)
+
+
+def change_str_to_int(tmpdir, column_name, file_path):
+
+    file_path = os.path.join(tmpdir, file_path)
+    df = (pl.scan_parquet(file_path).with_columns(pl.col(column_name))).collect(
+        streaming=IS_STREAMING
+    )
 
     unique_values = df[column_name].unique().to_list()
     unique_values.sort()

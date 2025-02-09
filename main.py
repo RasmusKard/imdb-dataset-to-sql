@@ -5,26 +5,37 @@ from os import path, remove
 from sqlalchemy import create_engine, inspect
 import configs.default
 import tempfile
-import os.path
-import os
 import polars as pl
 import sqlalchemy.types as sqltypes
+from helpers import join_path_with_random_uuid
+import tracemalloc
 
 # generate names for temp files here
 
+tracemalloc.start()
+
 with tempfile.TemporaryDirectory() as tmpdir:
 
-    MAIN_FILE = "title_file"
-    RATINGS_FILE = "ratings_file"
+    MAIN_FILE_PATH = join_path_with_random_uuid(tmpdir)
+    RATINGS_FILE_PATH = join_path_with_random_uuid(tmpdir)
+    GENRES_FILE_PATH = join_path_with_random_uuid(tmpdir)
     # Download ratings and title files from IMDb
     # dm.download_imdb_dataset(globals.IMDB_TITLE_BASICS_URL, "title.basics.tsv")
     # dm.download_imdb_dataset(
     #     config.IMDB_TITLE_RATINGS_URL, os.path.join(tmpdir, RATINGS_FILE)
     # )
 
-    SELECTED_CONFIG = configs.default.config_dict
-    SETTINGS = SELECTED_CONFIG.get("settings")
-    TABLES = SELECTED_CONFIG.get("tables").items()
+    SELECTED_CONFIG: dict[str, dict] = configs.default.config_dict
+    SETTINGS: dict | None = SELECTED_CONFIG.get("settings")
+    if not SETTINGS:
+        raise Exception(
+            "`settings`not found in config dict. Config is incomplete or incorrectly formatted."
+        )
+    TABLES: dict | None = SELECTED_CONFIG.get("tables")
+    if not TABLES:
+        raise Exception(
+            "`tables` not found in config dict. Config is incomplete or incorrectly formatted."
+        )
 
     if SETTINGS.get("is_split_genres_into_reftable"):
         globals.IMDB_DATA_ALLOWED_COLUMNS["genres"] = sqltypes.SMALLINT()
@@ -48,7 +59,7 @@ with tempfile.TemporaryDirectory() as tmpdir:
     ):
         raise Exception(
             "Given database already has tables, cancelling operation.\n"
-            "If you'd like to ignore this warning and continue then change `is_ignore_db_has_tables_warning` in config.json. (It's recommended to make a back-up of your data before doing this.)"
+            "If you'd like to ignore this warning and continue then change `is_ignore_db_has_tables_warning` to `true` in config.json. (It's recommended to make a back-up of your data before doing this.)"
         )
 
     lf = dm.clean_title_data(
@@ -62,7 +73,11 @@ with tempfile.TemporaryDirectory() as tmpdir:
         ratings_schema=globals.PL_RATINGS_SCHEMA,
     )
 
-    dm.split_columns_into_files(tmpdir=tmpdir, lf=lf)
+    df = lf.collect(streaming=IS_STREAMING)
+    df.write_parquet(MAIN_FILE_PATH)
+    del df
+
+    # dm.split_columns_into_files(tmpdir=tmpdir, lf=lf)
 
     # create temp folder
     # do cleaning in that folder
@@ -71,18 +86,19 @@ with tempfile.TemporaryDirectory() as tmpdir:
 
     if SETTINGS.get("is_split_genres_into_reftable") == True:
 
-        # dm.create_genres_file_from_title_file(
-        #     title_file_path=globals.TITLE_FILE_PATH,
-        #     genres_file_path=globals.GENRES_FILE_PATH,
-        # )
-
-        # dm.drop_genres_from_title(title_file_path=globals.TITLE_FILE_PATH)
-
         genres_column_name = "genres"
 
-        genres_values = dm.change_str_to_int(
+        dm.create_genres_file_from_title_file(
+            main_file_path=MAIN_FILE_PATH,
+            genres_file_path=GENRES_FILE_PATH,
             tmpdir=tmpdir,
             column_name=genres_column_name,
+        )
+
+        dm.drop_genres_from_title(main_file_path=MAIN_FILE_PATH)
+
+        genres_values = dm.change_str_to_int(
+            tmpdir=tmpdir, column_name=genres_column_name, file_path=GENRES_FILE_PATH
         )
 
         dfsql.create_reference_table(
@@ -92,9 +108,7 @@ with tempfile.TemporaryDirectory() as tmpdir:
         )
 
     if SETTINGS.get("is_convert_title_type_str_to_int"):
-        titleType_values = dm.change_str_to_int(
-            df_file_path=globals.TITLE_FILE_PATH, column_name="titleType"
-        )
+        titleType_values = dm.change_str_to_int(tmpdir=tmpdir, column_name="titleType")
 
         dfsql.create_reference_table(
             sql_engine=SQL_ENGINE,
@@ -102,11 +116,11 @@ with tempfile.TemporaryDirectory() as tmpdir:
             column_name="titleType",
         )
 
-    for table_name, table_dict in TABLES:
+    for table_name, table_dict in TABLES.items():
         dfsql.table_to_sql(
-            tmpdir=tmpdir,
             table_dict=table_dict,
             table_name=table_name,
             sql_engine=SQL_ENGINE,
-            settings=SETTINGS,
+            main_file_path=MAIN_FILE_PATH,
+            genres_file_path=GENRES_FILE_PATH,
         )

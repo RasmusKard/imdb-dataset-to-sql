@@ -31,16 +31,17 @@ def join_parquet_files_to_df(column_list, tmpdir):
     for path in path_arr:
         lf_arr.append(pl.scan_parquet(path))
 
-    lf = pl.concat(lf_arr, how="align")
-
+    # badbadbad?
+    lf = pl.concat(lf_arr, how="align").collect(streaming=True)
+    print("joining", lf.dtypes)
     file_name = str(uuid.uuid4())
     file_path = os.path.join(tmpdir, file_name)
-    lf.sink_parquet(file_path)
+    lf.write_parquet(file_path)
 
     return file_path
 
 
-def table_to_sql(tmpdir, table_dict, table_name, sql_engine, settings):
+def table_to_sql(table_dict, table_name, sql_engine, main_file_path, genres_file_path):
     values_dict = table_dict.get("values")
     if not values_dict:
         raise Exception("`values` empty in `tables`")
@@ -67,10 +68,8 @@ def table_to_sql(tmpdir, table_dict, table_name, sql_engine, settings):
             new_dtype_dict[new_column_name] = ALLOWED_COLUMNS[imdb_column_name]
         values_to_grab[imdb_column_name] = new_column_name
 
-    parquet_path = join_parquet_files_to_df(
-        column_list=values_to_grab.keys(), tmpdir=tmpdir
-    )
-    df = pd.read_parquet(parquet_path).rename(columns=values_to_grab)
+    df = pd.read_parquet(main_file_path, dtype_backend="pyarrow")
+
     df.to_sql(
         name=table_name,
         con=sql_engine,
