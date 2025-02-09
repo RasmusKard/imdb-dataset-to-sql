@@ -4,6 +4,7 @@ from sqlalchemy.types import String
 import globals
 import os.path
 import uuid
+import warnings
 
 
 def create_reference_table(sql_engine, value_dict, column_name):
@@ -46,29 +47,34 @@ def table_to_sql(table_dict, table_name, sql_engine, main_file_path, genres_file
     if not values_dict:
         raise Exception("`values` empty in `tables`")
 
+    new_col_names = values_dict.values()
+    cols_needed = values_dict.keys()
+
+    if len(new_col_names) != len(set(new_col_names)) or len(cols_needed) != len(
+        set(cols_needed)
+    ):
+        raise ValueError("Duplicates found in `values` dict.")
+
     dtype_dict = table_dict.get("dtypes")
-    new_dtype_dict = {}
-    if dtype_dict:
-        for column_name, dtype in dtype_dict.items():
-            if column_name not in values_dict.values():
-                raise Exception(
-                    f"`{column_name}` in dtypes doesn't match any column in `values`"
-                )
+    # handle `dtypes` incorrect key or `dtypes` being undefined
+    if dtype_dict != None:
+        dtype_col_name_set = set(dtype_dict.keys())
+        if not dtype_col_name_set.issubset(set(new_col_names)):
+            raise KeyError("`dtypes` references a column not found in `values`")
+    else:
+        dtype_dict = {}
 
-            new_dtype_dict[column_name] = dtype
-
-    values_to_grab = {}
     ALLOWED_COLUMNS = globals.IMDB_DATA_ALLOWED_COLUMNS
-    for imdb_column_name, new_column_name in table_dict["values"].items():
-        # check if value is in allowedvalues
-        if imdb_column_name not in ALLOWED_COLUMNS.keys():
-            raise Exception(f"Invalid value `{imdb_column_name}` in `{table_name}`")
+    for new_col_name, value_col_name in zip(new_col_names, cols_needed):
+        if value_col_name not in ALLOWED_COLUMNS:
+            raise ValueError(f"Invalid value `{value_col_name}` in `{table_name}`")
 
-        if new_column_name not in new_dtype_dict.keys():
-            new_dtype_dict[new_column_name] = ALLOWED_COLUMNS[imdb_column_name]
-        values_to_grab[imdb_column_name] = new_column_name
+        if new_col_name not in dtype_dict:
+            dtype_dict[new_col_name] = ALLOWED_COLUMNS[value_col_name]
 
-    df = pd.read_parquet(main_file_path, dtype_backend="pyarrow")
+    df = pd.read_parquet(
+        main_file_path, columns=list(cols_needed), dtype_backend="pyarrow"
+    ).rename(columns=values_dict)
 
     df.to_sql(
         name=table_name,
@@ -76,5 +82,5 @@ def table_to_sql(table_dict, table_name, sql_engine, main_file_path, genres_file
         if_exists="replace",
         chunksize=10000,
         index=False,
-        dtype=new_dtype_dict,
+        dtype=dtype_dict,
     )

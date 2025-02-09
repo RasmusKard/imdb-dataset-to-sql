@@ -4,21 +4,21 @@ import sqlalchemy.types as dtype
 # (The "default" file is reserved for special behavior, if you'd like to use different settings then create a new config file)
 
 
-# dtypes can be empty but then whatever default is given by pandas is used for sql dtypes
+# dtypes can be empty but then whatever default is set in `globals` is used for SQL dtypes
 
 config_dict = {
     "tables": {
         "title": {
+            # dtype key should match a `column_name`
             "dtypes": {"movieID": dtype.String(50)},
             "values": {
-                # imdb_dataset_value_column : new_column_name
+                # imdb_dataset_value_column : column_name
                 "tconst": "movieID",
-                "genres": "genres",
             },
         },
         "bruhtable": {
             "values": {
-                # imdb_dataset_value_column : new_column_name
+                # imdb_dataset_value_column : column_name
                 "tconst": "movieID",
                 "titleType": "titleType",
                 "runtimeMinutes": "runtimeMinutes",
