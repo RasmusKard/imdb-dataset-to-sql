@@ -1,9 +1,5 @@
-import polars as pl
 import pandas as pd
-from sqlalchemy.types import String
 import globals
-import os.path
-import uuid
 import warnings
 
 
@@ -21,25 +17,6 @@ def create_reference_table(sql_engine, value_dict, column_name):
         if_exists="replace",
         index=False,
     )
-
-
-def join_parquet_files_to_df(column_list, tmpdir):
-    path_arr = [
-        os.path.join(tmpdir, column) for column in column_list if column != "tconst"
-    ]
-
-    lf_arr = []
-    for path in path_arr:
-        lf_arr.append(pl.scan_parquet(path))
-
-    # badbadbad?
-    lf = pl.concat(lf_arr, how="align").collect(streaming=True)
-    print("joining", lf.dtypes)
-    file_name = str(uuid.uuid4())
-    file_path = os.path.join(tmpdir, file_name)
-    lf.write_parquet(file_path)
-
-    return file_path
 
 
 def table_to_sql(
@@ -97,7 +74,7 @@ def table_to_sql(
                 dtype_backend="pyarrow",
             )
 
-            df = pd.merge(df1, df2, on="tconst", how="left").rename(values_dict)
+            df = pd.merge(df1, df2, on="tconst", how="left").rename(columns=values_dict)
 
             warnings.warn(
                 "WARNING: It's not recommended to store values other than `tconst` in the same table as a split `genres` column. "

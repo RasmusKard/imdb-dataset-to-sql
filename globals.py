@@ -1,13 +1,10 @@
 import polars as pl
 import sqlalchemy.types as sqltypes
 
-# DATA PREPROCESSING VARIABLES
-TITLE_FILE_PATH = "temp_file_title"
-RATINGS_FILE_PATH = "temp_file_ratings"
-GENRES_FILE_PATH = "temp_file_genres"
 
 IMDB_TITLE_BASICS_URL = "https://datasets.imdbws.com/title.basics.tsv.gz"
 IMDB_TITLE_RATINGS_URL = "https://datasets.imdbws.com/title.ratings.tsv.gz"
+
 PL_TITLE_SCHEMA = {
     "tconst": pl.String,
     "titleType": pl.Categorical,
@@ -26,6 +23,7 @@ PL_RATINGS_SCHEMA = {
     "numVotes": pl.UInt32,
 }
 
+# Default dtype values for SQL tables
 IMDB_DATA_ALLOWED_COLUMNS = {
     "tconst": sqltypes.String(20),
     "titleType": sqltypes.String(20),
@@ -38,9 +36,4 @@ IMDB_DATA_ALLOWED_COLUMNS = {
     "genres": sqltypes.String(40),
     "averageRating": sqltypes.Float(),
     "numVotes": sqltypes.INT(),
-}
-
-IMDB_DATA_ALLOWED_SPLIT_COLUMNS = {
-    "genres",
-    "titleType",
 }

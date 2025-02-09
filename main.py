@@ -1,31 +1,28 @@
-import data_clean_modules as dm
-import dataframe_to_mysql as dfsql
+import modules.data_clean_modules as dm
+import modules.dataframe_to_mysql as dfsql
 import globals
 from os import path, remove
 from sqlalchemy import create_engine, inspect
 import configs.default
 import tempfile
-import polars as pl
 import sqlalchemy.types as sqltypes
-from helpers import join_path_with_random_uuid
-import tracemalloc
+from modules.helpers import join_path_with_random_uuid, download_imdb_dataset
+from typing import Any
 
 # generate names for temp files here
 
-tracemalloc.start()
 
 with tempfile.TemporaryDirectory() as tmpdir:
 
     MAIN_FILE_PATH = join_path_with_random_uuid(tmpdir)
     RATINGS_FILE_PATH = join_path_with_random_uuid(tmpdir)
     GENRES_FILE_PATH = join_path_with_random_uuid(tmpdir)
-    # Download ratings and title files from IMDb
-    # dm.download_imdb_dataset(globals.IMDB_TITLE_BASICS_URL, "title.basics.tsv")
-    # dm.download_imdb_dataset(
-    #     config.IMDB_TITLE_RATINGS_URL, os.path.join(tmpdir, RATINGS_FILE)
-    # )
 
-    SELECTED_CONFIG: dict[str, dict] = configs.default.config_dict
+    # Download ratings and title files from IMDb
+    download_imdb_dataset(globals.IMDB_TITLE_BASICS_URL, MAIN_FILE_PATH)
+    download_imdb_dataset(globals.IMDB_TITLE_RATINGS_URL, RATINGS_FILE_PATH)
+
+    SELECTED_CONFIG: dict[str, Any] = configs.default.config_dict
     SETTINGS: dict | None = SELECTED_CONFIG.get("settings")
     if not SETTINGS:
         raise Exception(
@@ -63,13 +60,13 @@ with tempfile.TemporaryDirectory() as tmpdir:
         )
 
     lf = dm.clean_title_data(
-        file_path=globals.TITLE_FILE_PATH,
+        file_path=MAIN_FILE_PATH,
         schema=globals.PL_TITLE_SCHEMA,
     )
 
     lf = dm.join_title_ratings(
         title_lf=lf,
-        ratings_path=globals.RATINGS_FILE_PATH,
+        ratings_path=RATINGS_FILE_PATH,
         ratings_schema=globals.PL_RATINGS_SCHEMA,
     )
 
@@ -91,7 +88,7 @@ with tempfile.TemporaryDirectory() as tmpdir:
         dm.drop_genres_from_title(main_file_path=MAIN_FILE_PATH)
 
         genres_values = dm.change_str_to_int(
-            tmpdir=tmpdir, column_name=genres_column_name, file_path=GENRES_FILE_PATH
+            column_name=genres_column_name, file_path=GENRES_FILE_PATH
         )
 
         dfsql.create_reference_table(
@@ -101,7 +98,9 @@ with tempfile.TemporaryDirectory() as tmpdir:
         )
 
     if SETTINGS.get("is_convert_title_type_str_to_int"):
-        titleType_values = dm.change_str_to_int(tmpdir=tmpdir, column_name="titleType")
+        titleType_values = dm.change_str_to_int(
+            column_name="titleType", file_path=MAIN_FILE_PATH
+        )
 
         dfsql.create_reference_table(
             sql_engine=SQL_ENGINE,

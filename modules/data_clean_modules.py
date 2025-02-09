@@ -1,38 +1,27 @@
-import gzip
 from os import path, remove
 from shutil import copyfileobj
 from urllib.request import urlretrieve
 import polars as pl
 import configs.default
 import os.path
-import uuid
+
+from typing import Any
 
 
 title_file = "title.basics.tsv"
 ratings_file = "title.ratings.tsv"
 
-SETTINGS: dict | None = configs.default.config_dict.get("settings")
+SELECTED_CONFIG: dict[str, Any] = configs.default.config_dict
+SETTINGS: dict | None = SELECTED_CONFIG.get("settings")
 if not SETTINGS:
     raise Exception("Settings not found")
 IS_STREAMING = SETTINGS.get("use_streaming") or False
 
 
-def download_imdb_dataset(url, output_path):
-    gz_file_path = output_path + ".gz"
-    urlretrieve(url, gz_file_path)
-
-    with gzip.open(gz_file_path, "rb") as f_in:
-        with open(output_path, "wb") as f_out:
-            copyfileobj(f_in, f_out)
-
-    if path.exists(gz_file_path):
-        remove(gz_file_path)
-
-
 # replace this with polars overwrite
 def remove_old_save_new_file(dataframe_to_write, file_path):
-    # if path.exists(file_path):
-    #     remove(file_path)
+    if path.exists(file_path):
+        remove(file_path)
 
     dataframe_type = type(dataframe_to_write)
     if dataframe_type == pl.DataFrame:
@@ -45,22 +34,11 @@ def remove_old_save_new_file(dataframe_to_write, file_path):
         )
 
 
-# def split_columns_into_files(tmpdir, lf):
-#     df = lf.collect(streaming=IS_STREAMING)
-
-#     column_list = df.columns
-#     column_list.remove("tconst")
-
-#     for column in column_list:
-#         temp_df = df.select(["tconst", column])
-#         temp_df.write_parquet(os.path.join(tmpdir, column))
-
-
 def clean_title_data(file_path, schema):
 
     lf = (
         pl.scan_csv(
-            title_file,
+            file_path,
             separator="\t",
             null_values=r"\N",
             quote_char=None,
@@ -102,7 +80,6 @@ def clean_title_data(file_path, schema):
 
 
 def join_title_ratings(title_lf, ratings_path, ratings_schema):
-    # title_lf = pl.scan_parquet(title_path)
 
     ratings_lf = pl.scan_csv(
         ratings_file,
@@ -141,11 +118,12 @@ def drop_genres_from_title(main_file_path):
     remove_old_save_new_file(dataframe_to_write=lf, file_path=main_file_path)
 
 
-def change_str_to_int(tmpdir, column_name, file_path):
+def change_str_to_int(column_name, file_path):
 
-    file_path = os.path.join(tmpdir, file_path)
-    df = (pl.scan_parquet(file_path).with_columns(pl.col(column_name))).collect(
-        streaming=IS_STREAMING
+    df = (
+        pl.scan_parquet(file_path)
+        .with_columns(pl.col(column_name))
+        .collect(streaming=IS_STREAMING)
     )
 
     unique_values = df[column_name].unique().to_list()
@@ -161,10 +139,6 @@ def change_str_to_int(tmpdir, column_name, file_path):
         .replace_strict(value_dict, return_dtype=pl.UInt8)
     )
 
-    tempfile_name = str(uuid.uuid4())
-    tempfile_path = os.path.join(tmpdir, tempfile_name)
-
-    df.write_parquet(tempfile_path)
-    os.replace(tempfile_path, file_path)
+    remove_old_save_new_file(dataframe_to_write=df, file_path=file_path)
 
     return value_dict
