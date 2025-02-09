@@ -16,13 +16,13 @@ import sqlalchemy.types as dtype
 # "averageRating",
 # "numVotes",
 
-# dtypes can be empty but then whatever default is set in `globals` is used for SQL dtypes
 
 config_dict = {
     "tables": {
         "bruhtable": {
             "dtypes": {
                 # dtype key should match a `column_name`
+                # dtypes can be empty but then whatever default is set in `globals` is used for SQL dtypes
                 "hahahahaa": dtype.INTEGER()
             },
             "values": {
@@ -52,6 +52,8 @@ config_dict = {
             "user": "root",
             "password": "1234",
             "database": "dataset_sql",
+            "dialect": "mysql",  # Supports every dialect supported by SQLAlchemy
+            # "driver": "mysqldb", # Uses SQLAlchemy recommended driver if left empty.
         },
         # split the comma separated genres string and convert it to an int with a lookup table
         "is_split_genres_into_reftable": True,

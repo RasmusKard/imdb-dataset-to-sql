@@ -1,6 +1,7 @@
 import pandas as pd
-import globals
 import warnings
+from sqlalchemy import MetaData, create_engine, Table
+from sqlalchemy.types import VARCHAR, String
 
 
 def create_reference_table(sql_engine, value_dict, column_name):
@@ -20,40 +21,16 @@ def create_reference_table(sql_engine, value_dict, column_name):
 
 
 def table_to_sql(
-    table_dict, table_name, sql_engine, main_file_path, genres_file_path, settings
+    table_info,
+    table_name,
+    sql_engine,
+    main_file_path,
+    genres_file_path,
+    settings,
 ):
-    values_dict = table_dict.get("values")
-    if not values_dict:
-        raise Exception("`values` empty in `tables`")
-
-    new_col_names = values_dict.values()
+    dtype_dict = table_info["dtype_dict"]
+    values_dict = table_info["values_dict"]
     cols_needed = values_dict.keys()
-
-    # check col_names and col_values for duplicates
-    if len(new_col_names) != len(set(new_col_names)) or len(cols_needed) != len(
-        set(cols_needed)
-    ):
-        raise ValueError("Duplicates found in `values` dict.")
-
-    dtype_dict = table_dict.get("dtypes")
-    # check that dtype value matches a column_name
-    if dtype_dict != None:
-        dtype_col_name_set = set(dtype_dict.keys())
-        if not dtype_col_name_set.issubset(set(new_col_names)):
-            raise KeyError("`dtypes` references a column not found in `values`")
-    # if dtype dict is None init it for use below
-    else:
-        dtype_dict = {}
-
-    ALLOWED_COLUMNS = globals.IMDB_DATA_ALLOWED_COLUMNS
-    for new_col_name, value_col_name in zip(new_col_names, cols_needed):
-        # check that column values match allowed values
-        if value_col_name not in ALLOWED_COLUMNS:
-            raise ValueError(f"Invalid value `{value_col_name}` in `{table_name}`")
-
-        # if dtype not declared by user then use default
-        if new_col_name not in dtype_dict:
-            dtype_dict[new_col_name] = ALLOWED_COLUMNS[value_col_name]
 
     # handle using the split genres file if needed
     if settings.get("is_split_genres_into_reftable") and "genres" in cols_needed:

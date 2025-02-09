@@ -13,3 +13,4 @@ temp_file_title
 .mypy_cache
 .vscode
 program.prof
+.env
