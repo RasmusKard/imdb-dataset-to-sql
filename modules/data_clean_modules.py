@@ -105,7 +105,11 @@ def create_genres_file_from_title_file(
 
 def drop_genres_from_title(main_file_path):
 
-    lf = pl.scan_parquet(main_file_path).drop("genres").collect(streaming=IS_STREAMING)
+    lf = (
+        pl.scan_parquet(main_file_path)
+        .drop("genres")
+        .collect(new_streaming=IS_STREAMING)
+    )
     remove_old_save_new_file(dataframe_to_write=lf, file_path=main_file_path)
 
 
@@ -114,7 +118,7 @@ def change_str_to_int(column_name, file_path):
     df = (
         pl.scan_parquet(file_path)
         .with_columns(pl.col(column_name))
-        .collect(streaming=IS_STREAMING)
+        .collect(new_streaming=IS_STREAMING)
     )
 
     unique_values = df[column_name].unique().to_list()

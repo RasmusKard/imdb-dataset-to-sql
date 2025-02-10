@@ -55,8 +55,9 @@ with tempfile.TemporaryDirectory() as tmpdir:
 
     sql_dialect = sql_creds["dialect"]
     sql_driver = sql_creds.get("driver")
+    sql_driver = f"+{sql_driver}" if sql_driver else ""
     SQL_ENGINE = create_engine(
-        f"{sql_dialect}{f"+{sql_driver}" if sql_driver else ""}://{sql_creds["user"]}:{environ['SQL_PASSWORD']}@{sql_creds["host"]}:{sql_creds["port"]}/{sql_creds["database"]}"
+        f"{sql_dialect}{sql_driver}://{sql_creds['user']}:{environ['SQL_PASSWORD']}@{sql_creds['host']}:{sql_creds['port']}/{sql_creds['database']}"
     )
 
     if (
@@ -92,7 +93,7 @@ with tempfile.TemporaryDirectory() as tmpdir:
         ratings_schema=const.PL_RATINGS_SCHEMA,
     )
 
-    df = lf.collect(streaming=IS_STREAMING)
+    df = lf.collect(new_streaming=IS_STREAMING)
     df.write_parquet(MAIN_FILE_PATH)
     del df
 

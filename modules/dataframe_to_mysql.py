@@ -66,7 +66,6 @@ def table_to_sql(
         name=table_name,
         con=sql_engine,
         if_exists="replace",
-        chunksize=10000,
         index=False,
         dtype=dtype_dict,
     )
