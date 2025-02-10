@@ -58,8 +58,8 @@ with tempfile.TemporaryDirectory() as tmpdir:
 
     if (
         not SETTINGS.get("is_ignore_db_has_tables_warning")
-        and inspect(SQL_ENGINE).get_table_names()
         and not is_updater
+        and inspect(SQL_ENGINE).get_table_names()
     ):
         raise Exception(
             "Given database already has tables, cancelling operation.\n"

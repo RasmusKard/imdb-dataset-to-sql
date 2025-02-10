@@ -1,4 +1,4 @@
-from sqlalchemy import MetaData, Table
+from sqlalchemy import MetaData
 
 
 def get_settings_tables_validity(tables, ALLOWED_COLUMNS, is_updater):
@@ -44,24 +44,38 @@ def get_settings_tables_validity(tables, ALLOWED_COLUMNS, is_updater):
 def get_is_settings_match_db_shape(tables_info, sql_engine):
     metadata = MetaData()
     metadata.reflect(bind=sql_engine)
+    target_tables = metadata.tables
 
     for tbl_name, tbl_info in tables_info.items():
-        table = Table(tbl_name, metadata)
-        target_columns = table.c
+        if tbl_name not in target_tables:
+            raise ValueError(f"`{tbl_name}` not found in target database.")
+
+        table = target_tables[tbl_name]
+        target_cols = table.c
 
         dtype_dict = tbl_info["dtype_dict"]
 
         source_col_set = set(dtype_dict.keys())
-        target_col_set = set(target_columns.keys())
+        target_col_set = set(target_cols.keys())
+        # source columns and target columns `name`s are the exact same
         if not target_col_set == source_col_set:
             raise ValueError(
                 f"Target SQL table `{tbl_name}` column names don't match `settings`. target: `{target_col_set}` source: `{source_col_set}`"
             )
 
-        for col in target_columns:
+        for col in target_cols:
             target_dtype = col.type.as_generic()
             source_dtype = dtype_dict[col.name].as_generic()
 
+            target_dtype_length = getattr(target_dtype, "length", None)
+            source_dtype_length = getattr(source_dtype, "length", None)
+            # Check if dtype `length` attr matches (both having None is also valid as some dtypes don't have a `length`)
+            if not target_dtype_length == source_dtype_length:
+                raise ValueError(
+                    f"Target SQL table `{tbl_name}` dtype length doesn't match `settings`. target: `{target_dtype}:{target_dtype_length}` source: `{source_dtype}:{source_dtype_length}`"
+                )
+
+            # works thanks to the as_generic() conversion above
             if not target_dtype.__class__ == source_dtype.__class__:
                 raise TypeError(
                     f"Target SQL table `{tbl_name}` column types don't match `settings`. target: `{target_dtype}` source: `{source_dtype}`"
