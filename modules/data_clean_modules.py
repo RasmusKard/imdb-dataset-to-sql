@@ -7,10 +7,6 @@ import os.path
 
 from typing import Any
 
-
-title_file = "title.basics.tsv"
-ratings_file = "title.ratings.tsv"
-
 SELECTED_CONFIG: dict[str, Any] = configs.default.config_dict
 SETTINGS: dict | None = SELECTED_CONFIG.get("settings")
 if not SETTINGS:
@@ -56,21 +52,20 @@ def clean_title_data(file_path, schema):
         lf = lf.filter(~pl.col("titleType").is_in(blocked_titletypes_set))
 
     # add adult to blocked genres based on `settings` bool and remove rows based on `isAdult`
-    blocked_genres_list = SETTINGS.get("blocked_genres")
+    blocked_genres_set = SETTINGS.get("blocked_genres")
     if SETTINGS.get("is_remove_adult") == True:
-        if blocked_genres_list:
-            blocked_genres_list.append("Adult")
+        if blocked_genres_set:
+            blocked_genres_set.add("Adult")
         else:
-            blocked_genres_list = {"Adult"}
+            blocked_genres_set = {"Adult"}
         lf = lf.filter(pl.col("isAdult") == 0)
 
     # remove blocked genres
-    if blocked_genres_list:
-
+    if blocked_genres_set:
         lf = lf.filter(
             pl.col("genres")
             .str.split(",")
-            .list.set_intersection(blocked_genres_list)
+            .list.set_intersection(list(blocked_genres_set))
             .list.len()
             .eq(0)
         )
@@ -80,18 +75,14 @@ def clean_title_data(file_path, schema):
 
 
 def join_title_ratings(title_lf, ratings_path, ratings_schema):
-
     ratings_lf = pl.scan_csv(
-        ratings_file,
+        ratings_path,
         separator="\t",
         null_values=r"\N",
         schema=ratings_schema,
     )
 
     title_lf = title_lf.join(ratings_lf, how="inner", on="tconst")
-
-    if path.exists(ratings_path):
-        remove(ratings_path)
 
     return title_lf
 
@@ -114,7 +105,11 @@ def create_genres_file_from_title_file(
 
 def drop_genres_from_title(main_file_path):
 
-    lf = pl.scan_parquet(main_file_path).drop("genres").collect(streaming=IS_STREAMING)
+    lf = (
+        pl.scan_parquet(main_file_path)
+        .drop("genres")
+        .collect(new_streaming=IS_STREAMING)
+    )
     remove_old_save_new_file(dataframe_to_write=lf, file_path=main_file_path)
 
 
@@ -123,7 +118,7 @@ def change_str_to_int(column_name, file_path):
     df = (
         pl.scan_parquet(file_path)
         .with_columns(pl.col(column_name))
-        .collect(streaming=IS_STREAMING)
+        .collect(new_streaming=IS_STREAMING)
     )
 
     unique_values = df[column_name].unique().to_list()

@@ -16,14 +16,13 @@ import sqlalchemy.types as dtype
 # "averageRating",
 # "numVotes",
 
-# dtypes can be empty but then whatever default is set in `globals` is used for SQL dtypes
 
 config_dict = {
     "tables": {
         "bruhtable": {
             "dtypes": {
                 # dtype key should match a `column_name`
-                "hahahahaa": dtype.INTEGER()
+                # dtypes can be empty but then whatever default is set in `globals` is used for SQL dtypes
             },
             "values": {
                 # `imdb_dataset_value_column` : `column_name`
@@ -31,7 +30,6 @@ config_dict = {
                 "titleType": "titleType",
                 "runtimeMinutes": "runtimeMinutes",
                 "numVotes": "numVotes",
-                "genres": "hahahahaa",
             },
         },
         "title": {
@@ -43,15 +41,17 @@ config_dict = {
         },
     },
     "settings": {
-        "blocked_genres": ["Horror", "Musical", "Short"],
+        "blocked_genres": {"Horror", "Musical", "Short"},
         "blocked_titletypes": {"tvEpisode", "videoGame", "tvShort"},
         "columns_to_drop": {"isAdult", "endYear", "originalTitle"},
         "database": {
+            # password is set in .env
             "host": "localhost",
             "port": 3306,
             "user": "root",
-            "password": "1234",
             "database": "dataset_sql",
+            "dialect": "mysql",  # Supports every dialect supported by SQLAlchemy
+            # "driver": "mysqldb", # Uses SQLAlchemy recommended driver if left empty.
         },
         # split the comma separated genres string and convert it to an int with a lookup table
         "is_split_genres_into_reftable": True,
