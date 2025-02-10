@@ -1,7 +1,8 @@
 import modules.data_clean_modules as dm
 import modules.dataframe_to_mysql as dfsql
 import modules.const as const
-from os import getenv
+from os import getenv, environ, listdir
+import shutil
 from sqlalchemy import create_engine, inspect
 import configs.default
 import tempfile
@@ -12,7 +13,7 @@ from typing import Any
 
 # generate names for temp files here
 
-is_updater = getenv("ISUPDATER", "False").lower() in ("true", "1", "t")
+is_updater = getenv("IS_UPDATER", "False").lower() in ("true", "1", "t")
 
 with tempfile.TemporaryDirectory() as tmpdir:
 
@@ -21,8 +22,12 @@ with tempfile.TemporaryDirectory() as tmpdir:
     GENRES_FILE_PATH = join_path_with_random_uuid(tmpdir)
 
     # Download ratings and title files from IMDb
-    download_imdb_dataset(const.IMDB_TITLE_BASICS_URL, MAIN_FILE_PATH)
-    download_imdb_dataset(const.IMDB_TITLE_RATINGS_URL, RATINGS_FILE_PATH)
+    # download_imdb_dataset(const.IMDB_TITLE_BASICS_URL, MAIN_FILE_PATH)
+    # download_imdb_dataset(const.IMDB_TITLE_RATINGS_URL, RATINGS_FILE_PATH)
+
+    # FOR DEV TO AVOID REDOWNLOADING
+    shutil.copy2("title.basics.tsv", MAIN_FILE_PATH)
+    shutil.copy2("title.ratings.tsv", RATINGS_FILE_PATH)
 
     SELECTED_CONFIG: dict[str, Any] = configs.default.config_dict
     SETTINGS: dict | None = SELECTED_CONFIG.get("settings")
@@ -51,7 +56,7 @@ with tempfile.TemporaryDirectory() as tmpdir:
     sql_dialect = sql_creds["dialect"]
     sql_driver = sql_creds.get("driver")
     SQL_ENGINE = create_engine(
-        f"{sql_dialect}{f"+{sql_driver}" if sql_driver else ""}://{sql_creds["user"]}:{sql_creds["password"]}@{sql_creds["host"]}:{sql_creds["port"]}/{sql_creds["database"]}"
+        f"{sql_dialect}{f"+{sql_driver}" if sql_driver else ""}://{sql_creds["user"]}:{environ['SQL_PASSWORD']}@{sql_creds["host"]}:{sql_creds["port"]}/{sql_creds["database"]}"
     )
 
     if (

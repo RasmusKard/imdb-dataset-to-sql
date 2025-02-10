@@ -41,14 +41,14 @@ config_dict = {
         },
     },
     "settings": {
-        "blocked_genres": ["Horror", "Musical", "Short"],
+        "blocked_genres": {"Horror", "Musical", "Short"},
         "blocked_titletypes": {"tvEpisode", "videoGame", "tvShort"},
         "columns_to_drop": {"isAdult", "endYear", "originalTitle"},
         "database": {
+            # password is set in .env
             "host": "localhost",
             "port": 3306,
             "user": "root",
-            "password": "1234",
             "database": "dataset_sql",
             "dialect": "mysql",  # Supports every dialect supported by SQLAlchemy
             # "driver": "mysqldb", # Uses SQLAlchemy recommended driver if left empty.
