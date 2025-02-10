@@ -1,20 +1,18 @@
 import modules.data_clean_modules as dm
 import modules.dataframe_to_mysql as dfsql
 import modules.const as const
-from os import path, remove, environ
+from os import getenv
 from sqlalchemy import create_engine, inspect
 import configs.default
 import tempfile
 import sqlalchemy.types as sqltypes
 from modules import settings_parsers
-from sqlalchemy import MetaData, Table
-
 from modules.helpers import join_path_with_random_uuid, download_imdb_dataset
 from typing import Any
 
 # generate names for temp files here
 
-is_updater = environ.get("ISUPDATER", True)
+is_updater = getenv("ISUPDATER", "False").lower() in ("true", "1", "t")
 
 with tempfile.TemporaryDirectory() as tmpdir:
 
@@ -126,12 +124,22 @@ with tempfile.TemporaryDirectory() as tmpdir:
             column_name="titleType",
         )
 
+    tbl_message_info = {}
     for tbl_name, tbl_info in tables_info.items():
-        dfsql.table_to_sql(
+        tbl_message_info[tbl_name] = dfsql.table_to_sql(
             table_info=tbl_info,
             table_name=tbl_name,
             sql_engine=SQL_ENGINE,
             main_file_path=MAIN_FILE_PATH,
             genres_file_path=GENRES_FILE_PATH,
             settings=SETTINGS,
+        )
+
+    print("Processing complete. Tables are as follows:\n")
+    for tbl_name, tbl_msg_dict in tbl_message_info.items():
+        print(
+            f"Table name: `{tbl_name}`\n"
+            f"Row count: {tbl_msg_dict.get('row_count')}\n"
+            f"Columns: {tbl_msg_dict.get('columns')}\n"
+            f"Dtypes: {tbl_msg_dict.get('dtypes')}\n",
         )

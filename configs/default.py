@@ -23,7 +23,6 @@ config_dict = {
             "dtypes": {
                 # dtype key should match a `column_name`
                 # dtypes can be empty but then whatever default is set in `globals` is used for SQL dtypes
-                "hahahahaa": dtype.INTEGER()
             },
             "values": {
                 # `imdb_dataset_value_column` : `column_name`
@@ -31,7 +30,6 @@ config_dict = {
                 "titleType": "titleType",
                 "runtimeMinutes": "runtimeMinutes",
                 "numVotes": "numVotes",
-                "genres": "hahahahaa",
             },
         },
         "title": {

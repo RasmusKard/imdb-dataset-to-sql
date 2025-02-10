@@ -70,3 +70,9 @@ def table_to_sql(
         index=False,
         dtype=dtype_dict,
     )
+
+    return {
+        "row_count": len(df.index),
+        "dtypes": list(dtype_dict.values()),
+        "columns": list(dtype_dict.keys()),
+    }
