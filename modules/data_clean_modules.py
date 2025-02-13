@@ -1,20 +1,8 @@
 from os import path, remove
-from shutil import copyfileobj
-from urllib.request import urlretrieve
 import polars as pl
-import configs.default
 import os.path
 from modules.helpers import join_path_with_random_uuid
 import os
-from memory_profiler import profile
-
-from typing import Any
-
-SELECTED_CONFIG: dict[str, Any] = configs.default.config_dict
-SETTINGS: dict | None = SELECTED_CONFIG.get("settings")
-if not SETTINGS:
-    raise Exception("Settings not found")
-IS_STREAMING = SETTINGS.get("is_streaming", False)
 
 
 # replace this with polars overwrite
@@ -45,6 +33,7 @@ def clean_title_and_join_with_ratings(
     ratings_schema,
     is_batched,
     tmpdir,
+    settings,
     batch_count=None,
 ):
 
@@ -57,7 +46,7 @@ def clean_title_and_join_with_ratings(
             schema=title_schema,
         )
 
-        lf = apply_title_cleaners(lf)
+        lf = apply_title_cleaners(lf, settings=settings)
 
         lf = join_title_ratings(
             title_lf=lf,
@@ -74,7 +63,7 @@ def clean_title_and_join_with_ratings(
         lf = (
             pl.scan_parquet(title_path)
             .with_columns(pl.col("startYear").fill_null(strategy="forward"))
-            .collect(new_streaming=True)
+            .collect(new_streaming=settings.get("is_streaming", False))
         )
         remove_old_save_new_file(
             file_path=title_path, tmpdir=tmpdir, dataframe_to_write=lf
@@ -88,6 +77,7 @@ def clean_title_and_join_with_ratings(
             tmpdir=tmpdir,
             ratings_path=ratings_path,
             ratings_schema=ratings_schema,
+            settings=settings,
         )
 
 
@@ -132,23 +122,23 @@ def batched_clean_title_data_and_join_with_ratings(
     os.replace(tmp_path, file_path)
 
 
-def apply_title_cleaners(df, is_batching=False):
-    # where startyear is None, replace it with last seen value
+def apply_title_cleaners(df, settings, is_batching=False):
     # drop rows where genres is null
     df = df.filter(pl.col("genres").is_not_null())
 
     # if it's not batching then forwardfill at this stage HEAVILY increases RAM usage
     if is_batching:
+        # where startyear is None, replace it with last seen value
         df = df.with_columns(pl.col("startYear").fill_null(strategy="forward"))
 
-    blocked_titletypes_set = SETTINGS.get("blocked_titletypes")
+    blocked_titletypes_set = settings.get("blocked_titletypes")
     if blocked_titletypes_set:
         # reverse the is_in using tilde operator
         df = df.filter(~pl.col("titleType").is_in(blocked_titletypes_set))
 
     # add adult to blocked genres based on `settings` bool and remove rows based on `isAdult`
-    blocked_genres_set = SETTINGS.get("blocked_genres")
-    if SETTINGS.get("is_remove_adult") == True:
+    blocked_genres_set = settings.get("blocked_genres")
+    if settings.get("is_remove_adult") == True:
         if blocked_genres_set:
             blocked_genres_set.add("Adult")
         else:
@@ -165,7 +155,7 @@ def apply_title_cleaners(df, is_batching=False):
             .eq(0)
         )
 
-    col_drop_arr = SETTINGS.get("columns_to_drop") or []
+    col_drop_arr = settings.get("columns_to_drop") or []
     df.drop(col_drop_arr)
     return df
 
@@ -208,12 +198,12 @@ def drop_genres_from_title(main_file_path, tmpdir):
     )
 
 
-def change_str_to_int(column_name, file_path):
+def change_str_to_int(column_name, file_path, is_streaming):
 
     df = (
         pl.scan_parquet(file_path)
         .with_columns(pl.col(column_name))
-        .collect(new_streaming=IS_STREAMING)
+        .collect(new_streaming=is_streaming)
     )
 
     unique_values = df[column_name].unique().to_list()
