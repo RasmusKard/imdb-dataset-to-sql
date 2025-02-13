@@ -10,7 +10,7 @@ PL_TITLE_SCHEMA = {
     "titleType": pl.Categorical,
     "primaryTitle": pl.String,
     "originalTitle": pl.String,
-    "isAdult": pl.UInt8,
+    "isAdult": pl.Int8,
     "startYear": pl.UInt16,
     "endYear": pl.UInt16,
     "runtimeMinutes": pl.UInt32,

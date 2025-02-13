@@ -54,11 +54,13 @@ config_dict = {
             # "driver": "mysqldb", # Uses SQLAlchemy recommended driver if left empty.
         },
         # split the comma separated genres string and convert it to an int with a lookup table
-        "is_split_genres_into_reftable": True,
+        "is_split_genres_into_reftable": False,
         # convert to int for lookup table creation
         "is_convert_title_type_str_to_int": False,
         "is_remove_adult": True,
-        "use_streaming": True,
+        "is_streaming": True,
         "is_ignore_db_has_tables_warning": True,
+        # Load datasets in batches to significantly reduce memory usage
+        "is_batching": True,
     },
 }

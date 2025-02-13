@@ -2,6 +2,7 @@ import pandas as pd
 import warnings
 from sqlalchemy import MetaData, create_engine, Table
 from sqlalchemy.types import VARCHAR, String
+from modules.helpers import join_path_with_random_uuid
 
 
 def create_reference_table(sql_engine, value_dict, column_name):
@@ -62,6 +63,18 @@ def table_to_sql(
             main_file_path, columns=list(cols_needed), dtype_backend="pyarrow"
         ).rename(columns=values_dict)
 
+    # print("MEM", df.memory_usage(deep=True).sum())
+    print(df.head())
+    # tbl_path = join_path_with_random_uuid(tmpdir)
+    # df.to_csv(tbl_path, index=False)
+
+    # df[:0].to_sql(
+    #     name=table_name, con=sql_engine, if_exists="replace", dtype=dtype_dict
+    # )
+
+    # df = pd.read_csv("bruh", chunksize=10000)
+    # if_ex = "replace"
+    # for chunk in df:
     df.to_sql(
         name=table_name,
         con=sql_engine,

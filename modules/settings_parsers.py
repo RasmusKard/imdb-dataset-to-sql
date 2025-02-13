@@ -1,9 +1,8 @@
 from sqlalchemy import MetaData
 
 
-def get_settings_tables_validity(tables, ALLOWED_COLUMNS, is_updater):
+def get_settings_tables_validity(tables, ALLOWED_COLUMNS):
     tables_info_dict = {}
-
     for table_name, table_dict in tables.items():
         values_dict = table_dict.get("values")
         if not values_dict:
