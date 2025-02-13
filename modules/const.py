@@ -10,7 +10,7 @@ PL_TITLE_SCHEMA = {
     "titleType": pl.Categorical,
     "primaryTitle": pl.String,
     "originalTitle": pl.String,
-    "isAdult": pl.UInt8,
+    "isAdult": pl.Int8,
     "startYear": pl.UInt16,
     "endYear": pl.UInt16,
     "runtimeMinutes": pl.UInt32,
@@ -24,6 +24,7 @@ PL_RATINGS_SCHEMA = {
 }
 
 # Default dtype values for SQL tables
+# also used for list of column names present in the imdb dataset
 IMDB_DATA_ALLOWED_COLUMNS = {
     "tconst": sqltypes.String(20),
     "titleType": sqltypes.String(20),

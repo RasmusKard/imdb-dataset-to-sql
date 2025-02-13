@@ -2,6 +2,7 @@ import pandas as pd
 import warnings
 from sqlalchemy import MetaData, create_engine, Table
 from sqlalchemy.types import VARCHAR, String
+from modules.helpers import join_path_with_random_uuid
 
 
 def create_reference_table(sql_engine, value_dict, column_name):

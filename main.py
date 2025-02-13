@@ -11,23 +11,26 @@ from modules import settings_parsers
 from modules.helpers import join_path_with_random_uuid, download_imdb_dataset
 from typing import Any
 
+
 # generate names for temp files here
 
 is_updater = getenv("IS_UPDATER", "False").lower() in ("true", "1", "t")
 
-with tempfile.TemporaryDirectory() as tmpdir:
+environ["POLARS_FORCE_NEW_STREAMING"] = "1"
 
+
+with tempfile.TemporaryDirectory() as tmpdir:
     MAIN_FILE_PATH = join_path_with_random_uuid(tmpdir)
     RATINGS_FILE_PATH = join_path_with_random_uuid(tmpdir)
     GENRES_FILE_PATH = join_path_with_random_uuid(tmpdir)
 
     # Download ratings and title files from IMDb
-    # download_imdb_dataset(const.IMDB_TITLE_BASICS_URL, MAIN_FILE_PATH)
-    # download_imdb_dataset(const.IMDB_TITLE_RATINGS_URL, RATINGS_FILE_PATH)
+    download_imdb_dataset(const.IMDB_TITLE_BASICS_URL, MAIN_FILE_PATH)
+    download_imdb_dataset(const.IMDB_TITLE_RATINGS_URL, RATINGS_FILE_PATH)
 
     # FOR DEV TO AVOID REDOWNLOADING
-    shutil.copy2("title.basics.tsv", MAIN_FILE_PATH)
-    shutil.copy2("title.ratings.tsv", RATINGS_FILE_PATH)
+    # shutil.copy2("title.basics.tsv", MAIN_FILE_PATH)
+    # shutil.copy2("title.ratings.tsv", RATINGS_FILE_PATH)
 
     SELECTED_CONFIG: dict[str, Any] = configs.default.config_dict
     SETTINGS: dict | None = SELECTED_CONFIG.get("settings")
@@ -41,8 +44,9 @@ with tempfile.TemporaryDirectory() as tmpdir:
             "`tables` not found in config dict. Config is incomplete or incorrectly formatted."
         )
 
-    IS_STREAMING = SETTINGS.get("use_streaming")
-    IS_SPLIT_GENRES = SETTINGS.get("is_split_genres_into_reftable")
+    IS_STREAMING = SETTINGS.get("is_streaming", False)
+    IS_BATCHING = SETTINGS.get("is_batching", False)
+    IS_SPLIT_GENRES = SETTINGS.get("is_split_genres_into_reftable", False)
     if IS_SPLIT_GENRES:
         const.IMDB_DATA_ALLOWED_COLUMNS["genres"] = sqltypes.SMALLINT()
     IS_CONVERT_TTYPE = SETTINGS.get("is_convert_title_type_str_to_int")
@@ -74,7 +78,6 @@ with tempfile.TemporaryDirectory() as tmpdir:
     tables_info = settings_parsers.get_settings_tables_validity(
         tables=TABLES,
         ALLOWED_COLUMNS=const.IMDB_DATA_ALLOWED_COLUMNS,
-        is_updater=is_updater,
     )
     # if updating check that target tables match shape in settings
     if is_updater:
@@ -82,20 +85,17 @@ with tempfile.TemporaryDirectory() as tmpdir:
             tables_info=tables_info, sql_engine=SQL_ENGINE
         )
 
-    lf = dm.clean_title_data(
-        file_path=MAIN_FILE_PATH,
-        schema=const.PL_TITLE_SCHEMA,
-    )
-
-    lf = dm.join_title_ratings(
-        title_lf=lf,
+    BATCH_COUNT = SETTINGS.get("batch_count", 1)
+    dm.clean_title_and_join_with_ratings(
+        title_path=MAIN_FILE_PATH,
         ratings_path=RATINGS_FILE_PATH,
+        title_schema=const.PL_TITLE_SCHEMA,
         ratings_schema=const.PL_RATINGS_SCHEMA,
+        is_batched=IS_BATCHING,
+        tmpdir=tmpdir,
+        batch_count=BATCH_COUNT,
+        settings=SETTINGS,
     )
-
-    df = lf.collect(new_streaming=IS_STREAMING)
-    df.write_parquet(MAIN_FILE_PATH)
-    del df
 
     if IS_SPLIT_GENRES:
         genres_column_name = "genres"
@@ -107,10 +107,12 @@ with tempfile.TemporaryDirectory() as tmpdir:
             column_name=genres_column_name,
         )
 
-        dm.drop_genres_from_title(main_file_path=MAIN_FILE_PATH)
+        dm.drop_genres_from_title(main_file_path=MAIN_FILE_PATH, tmpdir=tmpdir)
 
         genres_values = dm.change_str_to_int(
-            column_name=genres_column_name, file_path=GENRES_FILE_PATH
+            column_name=genres_column_name,
+            file_path=GENRES_FILE_PATH,
+            is_streaming=IS_STREAMING,
         )
 
         dfsql.create_reference_table(
@@ -121,7 +123,7 @@ with tempfile.TemporaryDirectory() as tmpdir:
 
     if IS_CONVERT_TTYPE:
         titleType_values = dm.change_str_to_int(
-            column_name="titleType", file_path=MAIN_FILE_PATH
+            column_name="titleType", file_path=MAIN_FILE_PATH, is_streaming=IS_STREAMING
         )
 
         dfsql.create_reference_table(
