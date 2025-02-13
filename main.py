@@ -22,7 +22,6 @@ is_updater = getenv("IS_UPDATER", "False").lower() in ("true", "1", "t")
 environ["POLARS_FORCE_NEW_STREAMING"] = "1"
 
 
-@profile
 def test():
     with tempfile.TemporaryDirectory() as tmpdir:
         MAIN_FILE_PATH = join_path_with_random_uuid(tmpdir)
@@ -90,6 +89,7 @@ def test():
                 tables_info=tables_info, sql_engine=SQL_ENGINE
             )
 
+        BATCH_COUNT = SETTINGS.get("batch_count", 1)
         dm.clean_title_and_join_with_ratings(
             title_path=MAIN_FILE_PATH,
             ratings_path=RATINGS_FILE_PATH,
@@ -97,7 +97,7 @@ def test():
             ratings_schema=const.PL_RATINGS_SCHEMA,
             is_batched=IS_BATCHING,
             tmpdir=tmpdir,
-            batch_count=1,
+            batch_count=BATCH_COUNT,
         )
 
         if IS_SPLIT_GENRES:

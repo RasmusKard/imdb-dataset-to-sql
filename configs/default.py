@@ -42,7 +42,7 @@ config_dict = {
     },
     "settings": {
         "blocked_genres": {"Horror", "Musical", "Short"},
-        "blocked_titletypes": {"tvEpisode", "videoGame", "tvShort"},
+        "blocked_titletypes": {"videoGame", "tvShort"},
         "columns_to_drop": {"isAdult", "endYear", "originalTitle"},
         "database": {
             # password is set in .env
@@ -60,7 +60,8 @@ config_dict = {
         "is_remove_adult": True,
         "is_streaming": True,
         "is_ignore_db_has_tables_warning": True,
-        # Load datasets in batches to significantly reduce memory usage
+        # Load datasets in batches to significantly reduce memory
         "is_batching": True,
+        "batch_count": 1,
     },
 }

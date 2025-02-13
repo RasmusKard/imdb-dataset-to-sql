@@ -24,6 +24,7 @@ PL_RATINGS_SCHEMA = {
 }
 
 # Default dtype values for SQL tables
+# also used for list of column names present in the imdb dataset
 IMDB_DATA_ALLOWED_COLUMNS = {
     "tconst": sqltypes.String(20),
     "titleType": sqltypes.String(20),

@@ -6,6 +6,7 @@ import configs.default
 import os.path
 from modules.helpers import join_path_with_random_uuid
 import os
+from memory_profiler import profile
 
 from typing import Any
 
@@ -24,11 +25,11 @@ def remove_old_save_new_file(dataframe_to_write, file_path, tmpdir=None):
         if path.exists(file_path):
             remove(file_path)
 
-        dataframe_to_write.write_parquet(file_path)
+        dataframe_to_write.write_csv(file_path)
     elif dataframe_type == pl.LazyFrame:
         print("trg")
         tmp_path = join_path_with_random_uuid(tmpdir)
-        dataframe_to_write.sink_parquet(tmp_path)
+        dataframe_to_write.sink_csv(tmp_path)
 
         os.replace(tmp_path, file_path)
     else:
@@ -45,7 +46,6 @@ def clean_title_and_join_with_ratings(
     is_batched,
     tmpdir,
     batch_count=None,
-    batch_size=50,
 ):
 
     if not is_batched:
@@ -59,41 +59,70 @@ def clean_title_and_join_with_ratings(
 
         lf = apply_title_cleaners(lf)
 
+        lf = join_title_ratings(
+            title_lf=lf,
+            ratings_path=ratings_path,
+            ratings_schema=ratings_schema,
+        )
+
+        remove_old_save_new_file(
+            file_path=title_path, tmpdir=tmpdir, dataframe_to_write=lf
+        )
+
+        # forwardfill needs to be done separately due to RAM concerns
+        # for some reason collecting is also less RAM intensive here than sinking?
+        lf = (
+            pl.scan_parquet(title_path)
+            .with_columns(pl.col("startYear").fill_null(strategy="forward"))
+            .collect(new_streaming=True)
+        )
+        remove_old_save_new_file(
+            file_path=title_path, tmpdir=tmpdir, dataframe_to_write=lf
+        )
+
     else:
-        lf = batched_clean_title_data(
+        batched_clean_title_data_and_join_with_ratings(
             file_path=title_path,
             schema=title_schema,
             batch_count=batch_count,
-            batch_size=batch_size,
             tmpdir=tmpdir,
+            ratings_path=ratings_path,
+            ratings_schema=ratings_schema,
         )
 
-    lf = join_title_ratings(
-        title_lf=lf, ratings_path=ratings_path, ratings_schema=ratings_schema
-    )
 
-    remove_old_save_new_file(file_path=title_path, tmpdir=tmpdir, dataframe_to_write=lf)
-
-
-def batched_clean_title_data(file_path, schema, batch_count, batch_size, tmpdir):
+def batched_clean_title_data_and_join_with_ratings(
+    file_path, schema, batch_count, tmpdir, ratings_path, ratings_schema
+):
     reader = pl.read_csv_batched(
         file_path,
         separator="\t",
         null_values=r"\N",
         quote_char=None,
         schema_overrides=schema,
-        batch_size=batch_size,
     )
     batches = reader.next_batches(batch_count)
-
     tmp_path = join_path_with_random_uuid(tmpdir)
 
     with open(tmp_path, mode="a") as f:
+
+        ratings_lf = pl.scan_csv(
+            ratings_path,
+            separator="\t",
+            null_values=r"\N",
+            schema=ratings_schema,
+        )
+
+        # handle not writing header constantly
         is_first_write = True
         while batches:
             for df in batches:
-                df = apply_title_cleaners(df)
-                df.write_csv(f, include_header=is_first_write)
+                lf = df.lazy()
+                lf = apply_title_cleaners(lf, is_batching=True)
+                lf = lf.join(ratings_lf, how="inner", on="tconst")
+                lf.collect(new_streaming=True).write_csv(
+                    f, include_header=is_first_write
+                )
 
             batches = reader.next_batches(batch_count)
 
@@ -102,15 +131,15 @@ def batched_clean_title_data(file_path, schema, batch_count, batch_size, tmpdir)
 
     os.replace(tmp_path, file_path)
 
-    return pl.scan_csv(file_path)
 
-
-def apply_title_cleaners(df):
+def apply_title_cleaners(df, is_batching=False):
     # where startyear is None, replace it with last seen value
     # drop rows where genres is null
-    df = df.filter(pl.col("genres").is_not_null()).with_columns(
-        pl.col("startYear").fill_null(strategy="forward")
-    )
+    df = df.filter(pl.col("genres").is_not_null())
+
+    # if it's not batching then forwardfill at this stage HEAVILY increases RAM usage
+    if is_batching:
+        df = df.with_columns(pl.col("startYear").fill_null(strategy="forward"))
 
     blocked_titletypes_set = SETTINGS.get("blocked_titletypes")
     if blocked_titletypes_set:
@@ -151,7 +180,7 @@ def join_title_ratings(title_lf, ratings_path, ratings_schema):
 
     title_lf = title_lf.join(ratings_lf, how="inner", on="tconst")
 
-    return title_lf.collect(new_streaming=True)
+    return title_lf
 
 
 def create_genres_file_from_title_file(
