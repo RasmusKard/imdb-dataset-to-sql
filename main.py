@@ -25,12 +25,12 @@ with tempfile.TemporaryDirectory() as tmpdir:
     GENRES_FILE_PATH = join_path_with_random_uuid(tmpdir)
 
     # Download ratings and title files from IMDb
-    download_imdb_dataset(const.IMDB_TITLE_BASICS_URL, MAIN_FILE_PATH)
-    download_imdb_dataset(const.IMDB_TITLE_RATINGS_URL, RATINGS_FILE_PATH)
+    # download_imdb_dataset(const.IMDB_TITLE_BASICS_URL, MAIN_FILE_PATH)
+    # download_imdb_dataset(const.IMDB_TITLE_RATINGS_URL, RATINGS_FILE_PATH)
 
     # FOR DEV TO AVOID REDOWNLOADING
-    # shutil.copy2("title.basics.tsv", MAIN_FILE_PATH)
-    # shutil.copy2("title.ratings.tsv", RATINGS_FILE_PATH)
+    shutil.copy2("title.basics.tsv", MAIN_FILE_PATH)
+    shutil.copy2("title.ratings.tsv", RATINGS_FILE_PATH)
 
     SELECTED_CONFIG: dict[str, Any] = configs.default.config_dict
     SETTINGS: dict | None = SELECTED_CONFIG.get("settings")
@@ -60,9 +60,8 @@ with tempfile.TemporaryDirectory() as tmpdir:
     sql_dialect = sql_creds["dialect"]
     sql_driver = sql_creds.get("driver")
     sql_driver = f"+{sql_driver}" if sql_driver else ""
-    SQL_ENGINE = create_engine(
-        f"{sql_dialect}{sql_driver}://{sql_creds['user']}:{environ['SQL_PASSWORD']}@{sql_creds['host']}:{sql_creds['port']}/{sql_creds['database']}"
-    )
+    sql_uri = f"{sql_dialect}{sql_driver}://{sql_creds['user']}:{environ['SQL_PASSWORD']}@{sql_creds['host']}:{sql_creds['port']}/{sql_creds['database']}"
+    SQL_ENGINE = create_engine(sql_uri)
 
     if (
         not SETTINGS.get("is_ignore_db_has_tables_warning")
@@ -123,7 +122,9 @@ with tempfile.TemporaryDirectory() as tmpdir:
 
     if IS_CONVERT_TTYPE:
         titleType_values = dm.change_str_to_int(
-            column_name="titleType", file_path=MAIN_FILE_PATH, is_streaming=IS_STREAMING
+            column_name="titleType",
+            file_path=MAIN_FILE_PATH,
+            is_streaming=IS_STREAMING,
         )
 
         dfsql.create_reference_table(
@@ -138,16 +139,11 @@ with tempfile.TemporaryDirectory() as tmpdir:
             table_info=tbl_info,
             table_name=tbl_name,
             sql_engine=SQL_ENGINE,
+            sql_uri=sql_uri,
             main_file_path=MAIN_FILE_PATH,
             genres_file_path=GENRES_FILE_PATH,
             settings=SETTINGS,
+            tmpdir=tmpdir,
         )
 
-    print("Processing complete. Tables are as follows:\n")
-    for tbl_name, tbl_msg_dict in tbl_message_info.items():
-        print(
-            f"Table name: `{tbl_name}`\n"
-            f"Row count: {tbl_msg_dict.get('row_count')}\n"
-            f"Columns: {tbl_msg_dict.get('columns')}\n"
-            f"Dtypes: {tbl_msg_dict.get('dtypes')}\n",
-        )
+    print("Processing complete")

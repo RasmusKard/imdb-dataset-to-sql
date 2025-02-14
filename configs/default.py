@@ -42,7 +42,7 @@ config_dict = {
     },
     "settings": {
         "blocked_genres": {"Horror", "Musical", "Short"},
-        "blocked_titletypes": {"videoGame", "tvShort"},
+        "blocked_titletypes": {"tvEpisode", "videoGame", "tvShort"},
         "columns_to_drop": {"isAdult", "endYear", "originalTitle"},
         "database": {
             # password is set in .env
@@ -51,10 +51,10 @@ config_dict = {
             "user": "root",
             "database": "dataset_sql",
             "dialect": "mysql",  # Supports every dialect supported by SQLAlchemy
-            # "driver": "mysqldb", # Uses SQLAlchemy recommended driver if left empty.
+            # "driver": "mysqldb",  # Uses SQLAlchemy recommended driver if left empty/undefined.
         },
         # split the comma separated genres string and convert it to an int with a lookup table
-        "is_split_genres_into_reftable": False,
+        "is_split_genres_into_reftable": True,
         # convert to int for lookup table creation
         "is_convert_title_type_str_to_int": False,
         "is_remove_adult": True,
@@ -62,6 +62,7 @@ config_dict = {
         "is_ignore_db_has_tables_warning": True,
         # Load datasets in batches to significantly reduce memory
         "is_batching": True,
+        # Higher batch_count = more mem usage but slight speed improvement
         "batch_count": 1,
     },
 }

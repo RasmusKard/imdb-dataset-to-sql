@@ -3,10 +3,11 @@ import polars as pl
 import os.path
 from modules.helpers import join_path_with_random_uuid
 import os
+from modules.const import PL_SCHEMA_OVERRIDE
 
 
 # replace this with polars overwrite
-def remove_old_save_new_file(dataframe_to_write, file_path, tmpdir=None):
+def save_dataframe(dataframe_to_write, file_path, tmpdir=None):
 
     dataframe_type = type(dataframe_to_write)
     if dataframe_type == pl.DataFrame:
@@ -15,7 +16,6 @@ def remove_old_save_new_file(dataframe_to_write, file_path, tmpdir=None):
 
         dataframe_to_write.write_csv(file_path)
     elif dataframe_type == pl.LazyFrame:
-        print("trg")
         tmp_path = join_path_with_random_uuid(tmpdir)
         dataframe_to_write.sink_csv(tmp_path)
 
@@ -54,9 +54,7 @@ def clean_title_and_join_with_ratings(
             ratings_schema=ratings_schema,
         )
 
-        remove_old_save_new_file(
-            file_path=title_path, tmpdir=tmpdir, dataframe_to_write=lf
-        )
+        save_dataframe(file_path=title_path, tmpdir=tmpdir, dataframe_to_write=lf)
 
         # forwardfill needs to be done separately due to RAM concerns
         # for some reason collecting is also less RAM intensive here than sinking?
@@ -65,9 +63,7 @@ def clean_title_and_join_with_ratings(
             .with_columns(pl.col("startYear").fill_null(strategy="forward"))
             .collect(new_streaming=settings.get("is_streaming", False))
         )
-        remove_old_save_new_file(
-            file_path=title_path, tmpdir=tmpdir, dataframe_to_write=lf
-        )
+        save_dataframe(file_path=title_path, tmpdir=tmpdir, dataframe_to_write=lf)
 
     else:
         batched_clean_title_data_and_join_with_ratings(
@@ -82,7 +78,7 @@ def clean_title_and_join_with_ratings(
 
 
 def batched_clean_title_data_and_join_with_ratings(
-    file_path, schema, batch_count, tmpdir, ratings_path, ratings_schema
+    file_path, schema, batch_count, tmpdir, ratings_path, ratings_schema, settings
 ):
     reader = pl.read_csv_batched(
         file_path,
@@ -108,7 +104,7 @@ def batched_clean_title_data_and_join_with_ratings(
         while batches:
             for df in batches:
                 lf = df.lazy()
-                lf = apply_title_cleaners(lf, is_batching=True)
+                lf = apply_title_cleaners(lf, settings=settings, is_batching=True)
                 lf = lf.join(ratings_lf, how="inner", on="tconst")
                 lf.collect(new_streaming=True).write_csv(
                     f, include_header=is_first_write
@@ -178,30 +174,26 @@ def create_genres_file_from_title_file(
 ):
 
     lf = (
-        pl.scan_parquet(main_file_path)
+        pl.scan_csv(main_file_path, schema_overrides=PL_SCHEMA_OVERRIDE)
         .with_columns(pl.col(column_name).str.split(","))
         .explode(column_name)
         .select(["tconst", column_name])
     )
 
-    genres_file_path = os.path.join(tmpdir, genres_file_path)
-
-    lf.sink_parquet(genres_file_path)
+    save_dataframe(dataframe_to_write=lf, file_path=genres_file_path, tmpdir=tmpdir)
 
 
 def drop_genres_from_title(main_file_path, tmpdir):
 
-    lf = pl.scan_parquet(main_file_path).drop("genres")
+    lf = pl.scan_csv(main_file_path, schema_overrides=PL_SCHEMA_OVERRIDE).drop("genres")
 
-    remove_old_save_new_file(
-        dataframe_to_write=lf, file_path=main_file_path, tmpdir=tmpdir
-    )
+    save_dataframe(dataframe_to_write=lf, file_path=main_file_path, tmpdir=tmpdir)
 
 
 def change_str_to_int(column_name, file_path, is_streaming):
 
     df = (
-        pl.scan_parquet(file_path)
+        pl.scan_csv(file_path, schema_overrides=PL_SCHEMA_OVERRIDE)
         .with_columns(pl.col(column_name))
         .collect(new_streaming=is_streaming)
     )
@@ -219,6 +211,6 @@ def change_str_to_int(column_name, file_path, is_streaming):
         .replace_strict(value_dict, return_dtype=pl.UInt8)
     )
 
-    remove_old_save_new_file(dataframe_to_write=df, file_path=file_path)
+    save_dataframe(dataframe_to_write=df, file_path=file_path)
 
     return value_dict

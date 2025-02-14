@@ -10,7 +10,7 @@ PL_TITLE_SCHEMA = {
     "titleType": pl.Categorical,
     "primaryTitle": pl.String,
     "originalTitle": pl.String,
-    "isAdult": pl.Int8,
+    "isAdult": pl.UInt8,
     "startYear": pl.UInt16,
     "endYear": pl.UInt16,
     "runtimeMinutes": pl.UInt32,
@@ -22,6 +22,24 @@ PL_RATINGS_SCHEMA = {
     "averageRating": pl.Float32,
     "numVotes": pl.UInt32,
 }
+
+# Used for reading with Polars when the exact columns aren't known
+PL_SCHEMA_OVERRIDE = {
+    "tconst": pl.String,
+    "averageRating": pl.Float32,
+    "numVotes": pl.UInt32,
+    "tconst": pl.String,
+    "titleType": pl.Categorical,
+    "primaryTitle": pl.String,
+    "originalTitle": pl.String,
+    "isAdult": pl.Int8,
+    "startYear": pl.UInt16,
+    "endYear": pl.UInt16,
+    "runtimeMinutes": pl.UInt32,
+    "genres": pl.String,
+}
+
+PL_SPLIT_GENRES_FILE_SCHEMA = {"tconst": pl.String, "genres": pl.UInt8}
 
 # Default dtype values for SQL tables
 # also used for list of column names present in the imdb dataset
