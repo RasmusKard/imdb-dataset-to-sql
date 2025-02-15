@@ -47,14 +47,14 @@ config_dict = {
         "database": {
             # password is set in .env
             "host": "localhost",
-            "port": 3306,
-            "user": "root",
-            "database": "dataset_sql",
-            "dialect": "mysql",  # Supports every dialect supported by SQLAlchemy
+            "port": 5432,
+            "user": "postgres",
+            "database": "template1",
+            "dialect": "postgresql",  # Supports every dialect supported by SQLAlchemy
             # "schema": "imdb_data" # Name of schema to create tables in, if SQL dialect supports it (like PostgreSQL)
             # "driver": "mysqldb",  # Uses SQLAlchemy recommended driver if left empty/undefined.
         },
-        "is_split_genres_into_reftable": False,  # split the comma separated genres string and convert it to an int with a lookup table
+        "is_split_genres_into_reftable": True,  # split the comma separated genres string and convert it to an int with a lookup table
         "is_convert_title_type_str_to_int": False,  # convert to int for lookup table creation
         "is_remove_adult": True,
         "is_streaming": True,

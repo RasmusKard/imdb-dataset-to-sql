@@ -33,6 +33,7 @@ def table_to_sql(
     settings,
     tmpdir,
     sql_uri,
+    is_updater,
 ):
     dtype_dict = table_info["dtype_dict"]
     values_dict = table_info["values_dict"]
@@ -81,24 +82,26 @@ def table_to_sql(
     sql_dialect_name = sql_engine.dialect.name
     sql_dialect_driver = sql_engine.dialect.driver
     is_dialect_supported = sql_dialect_name in NATIVE_IMPORT_SUPPORTED_DIALECTS
-    is_driver_supported = (
-        sql_dialect_driver in NATIVE_IMPORT_SUPPORTED_DIALECTS[sql_dialect_name]
-    )
 
-    if is_dialect_supported and is_driver_supported:
+    if (
+        is_dialect_supported
+        and sql_dialect_driver in NATIVE_IMPORT_SUPPORTED_DIALECTS[sql_dialect_name]
+    ):
 
         tmp_path = join_path_with_random_uuid(tmpdir)
         lf.sink_csv(tmp_path)
 
         # create the table using the csv headers and dtype_dict
-        df = pd.read_csv(tmp_path, nrows=0)
-        df[:0].to_sql(
-            name=table_name,
-            con=sql_engine,
-            if_exists="replace",
-            index=False,
-            dtype=dtype_dict,
-        )
+        # skip if updating to not mess up indices
+        if not is_updater:
+            df = pd.read_csv(tmp_path, nrows=0)
+            df[:0].to_sql(
+                name=table_name,
+                con=sql_engine,
+                if_exists="replace",
+                index=False,
+                dtype=dtype_dict,
+            )
 
         try:
             match sql_dialect_name:
@@ -107,6 +110,9 @@ def table_to_sql(
                     conn = sql_engine.raw_connection()
                     cur = conn.cursor()
                     cur.execute("SET GLOBAL local_infile=1;")
+
+                    if is_updater:
+                        cur.execute(f"""TRUNCATE TABLE {table_name}""")
 
                     sql_load = f"""
                     LOAD DATA LOCAL INFILE '{tmp_path}'
@@ -123,6 +129,9 @@ def table_to_sql(
                 case "postgresql":
                     conn = sql_engine.raw_connection()
                     cur = conn.cursor()
+
+                    if is_updater:
+                        cur.execute(f"""TRUNCATE TABLE {table_name}""")
 
                     copy_sql = f"""
                     COPY {table_name} FROM stdin WITH CSV HEADER
