@@ -51,18 +51,15 @@ config_dict = {
             "user": "root",
             "database": "dataset_sql",
             "dialect": "mysql",  # Supports every dialect supported by SQLAlchemy
+            # "schema": "imdb_data" # Name of schema to create tables in, if SQL dialect supports it (like PostgreSQL)
             # "driver": "mysqldb",  # Uses SQLAlchemy recommended driver if left empty/undefined.
         },
-        # split the comma separated genres string and convert it to an int with a lookup table
-        "is_split_genres_into_reftable": True,
-        # convert to int for lookup table creation
-        "is_convert_title_type_str_to_int": False,
+        "is_split_genres_into_reftable": False,  # split the comma separated genres string and convert it to an int with a lookup table
+        "is_convert_title_type_str_to_int": False,  # convert to int for lookup table creation
         "is_remove_adult": True,
         "is_streaming": True,
-        "is_ignore_db_has_tables_warning": True,
-        # Load datasets in batches to significantly reduce memory
-        "is_batching": True,
-        # Higher batch_count = more mem usage but slight speed improvement
-        "batch_count": 1,
+        "is_ignore_db_has_tables_error": True,
+        "is_batching": True,  # Load datasets in batches to significantly reduce memory
+        "batch_count": 1,  # Higher batch_count = more mem usage but slight speed improvement
     },
 }
