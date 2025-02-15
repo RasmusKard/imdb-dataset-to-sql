@@ -33,6 +33,7 @@ def table_to_sql(
     settings,
     tmpdir,
     sql_uri,
+    is_updater,
 ):
     dtype_dict = table_info["dtype_dict"]
     values_dict = table_info["values_dict"]
@@ -59,7 +60,7 @@ def table_to_sql(
             lf = lf0.join(lf1, on="tconst", how="inner").rename(values_dict)
 
             warnings.warn(
-                "WARNING: It's not recommended to store values other than `tconst` in the same table as a split `genres` column.\n"
+                "\nWARNING: It's not recommended to store values other than `tconst` in the same table as a split `genres` column.\n"
                 + "It's better to use a Foreign Key constraint on tconst of the split `genres` table and the table with your other columns."
             )
     else:
@@ -73,24 +74,26 @@ def table_to_sql(
         )
 
     # supported_dialect:[supported_drivers]
-    NATIVE_IMPORT_SUPPORTED_DIALECTS = {"mysql": ["pymysql", "mysqldb"]}
-    sql_dialect = sql_engine.dialect
-    sql_dialect_name = sql_dialect.name
+    NATIVE_IMPORT_SUPPORTED_DIALECTS = {
+        "mysql": ["mysqldb", "pymysql"],
+        "postgresql": ["psycopg2"],
+    }
+
+    sql_dialect_name = sql_engine.dialect.name
+    sql_dialect_driver = sql_engine.dialect.driver
+    is_dialect_supported = sql_dialect_name in NATIVE_IMPORT_SUPPORTED_DIALECTS
+
     if (
-        sql_dialect_name == "mysql"
-        and sql_dialect.driver in NATIVE_IMPORT_SUPPORTED_DIALECTS["mysql"]
+        is_dialect_supported
+        and sql_dialect_driver in NATIVE_IMPORT_SUPPORTED_DIALECTS[sql_dialect_name]
     ):
-        sql_engine = create_engine(sql_uri + "?local_infile=1")
 
-        conn = sql_engine.raw_connection()
-        try:
-            cursor = conn.cursor()
-            cursor.execute("SET GLOBAL local_infile=1;")
+        tmp_path = join_path_with_random_uuid(tmpdir)
+        lf.sink_csv(tmp_path)
 
-            tmp_path = join_path_with_random_uuid(tmpdir)
-            lf.sink_csv(tmp_path)
-
-            # create table with csv header and dtypes
+        # create the table using the csv headers and dtype_dict
+        # skip if updating to not mess up indices
+        if not is_updater:
             df = pd.read_csv(tmp_path, nrows=0)
             df[:0].to_sql(
                 name=table_name,
@@ -100,25 +103,52 @@ def table_to_sql(
                 dtype=dtype_dict,
             )
 
-            sql_load = f"""
-                LOAD DATA LOCAL INFILE '{tmp_path}'
-                INTO TABLE {table_name}
-                FIELDS TERMINATED BY ','
-                ENCLOSED BY '"'
-                LINES TERMINATED BY '\\n'
-                IGNORE 1 ROWS;
-                """
+        try:
+            match sql_dialect_name:
+                case "mysql":
+                    sql_engine = create_engine(sql_uri + "?local_infile=1")
+                    conn = sql_engine.raw_connection()
+                    cur = conn.cursor()
+                    cur.execute("SET GLOBAL local_infile=1;")
 
-            cursor.execute(sql_load)
-            cursor.execute("SET GLOBAL local_infile=0;")
-            conn.commit()
+                    if is_updater:
+                        cur.execute(f"""TRUNCATE TABLE {table_name}""")
+
+                    sql_load = f"""
+                    LOAD DATA LOCAL INFILE '{tmp_path}'
+                    INTO TABLE {table_name}
+                    FIELDS TERMINATED BY ','
+                    ENCLOSED BY '"'
+                    LINES TERMINATED BY '\\n'
+                    IGNORE 1 ROWS;
+                    """
+
+                    cur.execute(sql_load)
+                    cur.execute("SET GLOBAL local_infile=0;")
+
+                case "postgresql":
+                    conn = sql_engine.raw_connection()
+                    cur = conn.cursor()
+
+                    if is_updater:
+                        cur.execute(f"""TRUNCATE TABLE {table_name}""")
+
+                    copy_sql = f"""
+                    COPY {table_name} FROM stdin WITH CSV HEADER
+                    DELIMITER as ','
+                    """
+
+                    with open(tmp_path, "r") as f:
+                        cur.copy_expert(sql=copy_sql, file=f)
+
         finally:
-            cursor.close()
+            conn.commit()
+            cur.close()
             conn.close()
     else:
-        if sql_dialect_name in NATIVE_IMPORT_SUPPORTED_DIALECTS:
+        if is_dialect_supported:
             warnings.warn(
-                "WARNING: Falling back to Pandas.to_sql().\n"
+                "\nWARNING: Falling back to Pandas.to_sql().\n"
                 + f"Dialect is supported for native data-import but driver isn't, please use one of the following drivers for improved import speed: {NATIVE_IMPORT_SUPPORTED_DIALECTS[sql_dialect_name]}"
             )
 

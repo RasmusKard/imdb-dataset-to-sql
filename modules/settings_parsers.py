@@ -40,15 +40,25 @@ def get_settings_tables_validity(tables, ALLOWED_COLUMNS):
     return tables_info_dict
 
 
-def get_is_settings_match_db_shape(tables_info, sql_engine):
+def get_is_settings_match_db_shape(
+    tables_info, sql_engine, is_split_genres, is_convert_ttype
+):
     metadata = MetaData()
     metadata.reflect(bind=sql_engine)
     target_tables = metadata.tables
 
-    for tbl_name, tbl_info in tables_info.items():
-        if tbl_name not in target_tables:
-            raise ValueError(f"`{tbl_name}` not found in target database.")
+    source_table_names = set(tables_info.keys())
+    if is_split_genres:
+        source_table_names.add("genres_ref")
+    if is_convert_ttype:
+        source_table_names.add("titleType_ref")
+    target_table_names = set(target_tables.keys())
+    if not source_table_names == target_table_names:
+        raise ValueError(
+            f"Source table names `{source_table_names}` don't match target table names `{target_table_names}`"
+        )
 
+    for tbl_name, tbl_info in tables_info.items():
         table = target_tables[tbl_name]
         target_cols = table.c
 
