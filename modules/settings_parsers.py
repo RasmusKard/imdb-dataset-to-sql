@@ -45,10 +45,14 @@ def get_is_settings_match_db_shape(tables_info, sql_engine):
     metadata.reflect(bind=sql_engine)
     target_tables = metadata.tables
 
-    for tbl_name, tbl_info in tables_info.items():
-        if tbl_name not in target_tables:
-            raise ValueError(f"`{tbl_name}` not found in target database.")
+    source_table_names = set(tables_info.keys())
+    target_table_names = set(target_tables.keys())
+    if not source_table_names == target_table_names:
+        raise ValueError(
+            f"Source table names `{source_table_names}` don't match target table names `{target_table_names}`"
+        )
 
+    for tbl_name, tbl_info in tables_info.items():
         table = target_tables[tbl_name]
         target_cols = table.c
 
