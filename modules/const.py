@@ -56,3 +56,5 @@ IMDB_DATA_ALLOWED_COLUMNS = {
     "averageRating": sqltypes.Float(),
     "numVotes": sqltypes.INT(),
 }
+
+COL_NAME_REFTABLE_NAME = {"genres": "genres_ref", "titleType": "titleType_ref"}

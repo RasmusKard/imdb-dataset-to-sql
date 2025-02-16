@@ -11,6 +11,7 @@ from modules import settings_parsers
 from modules.helpers import join_path_with_random_uuid, download_imdb_dataset
 from typing import Any
 from memory_profiler import profile
+import polars as pl
 
 
 # generate names for temp files here
@@ -83,11 +84,19 @@ def test():
         )
         # if updating check that target tables match shape in settings
         if is_updater:
+            reftable_names = [
+                const.COL_NAME_REFTABLE_NAME[key]
+                for key, value in {
+                    "genres": IS_SPLIT_GENRES,
+                    "titleType": IS_CONVERT_TTYPE,
+                }.items()
+                if value
+            ]
+
             settings_parsers.get_is_settings_match_db_shape(
                 tables_info=tables_info,
                 sql_engine=SQL_ENGINE,
-                is_split_genres=IS_SPLIT_GENRES,
-                is_convert_ttype=IS_CONVERT_TTYPE,
+                reftable_names=reftable_names,
             )
 
         BATCH_COUNT = SETTINGS.get("batch_count", 1)
