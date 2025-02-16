@@ -40,18 +40,14 @@ def get_settings_tables_validity(tables, ALLOWED_COLUMNS):
     return tables_info_dict
 
 
-def get_is_settings_match_db_shape(
-    tables_info, sql_engine, is_split_genres, is_convert_ttype
-):
+def get_is_settings_match_db_shape(tables_info, sql_engine, reftable_names):
     metadata = MetaData()
     metadata.reflect(bind=sql_engine)
     target_tables = metadata.tables
 
     source_table_names = set(tables_info.keys())
-    if is_split_genres:
-        source_table_names.add("genres_ref")
-    if is_convert_ttype:
-        source_table_names.add("titleType_ref")
+    if reftable_names:
+        source_table_names.update(reftable_names)
     target_table_names = set(target_tables.keys())
     if not source_table_names == target_table_names:
         raise ValueError(
@@ -81,11 +77,11 @@ def get_is_settings_match_db_shape(
             # Check if dtype `length` attr matches (both having None is also valid as some dtypes don't have a `length`)
             if not target_dtype_length == source_dtype_length:
                 raise ValueError(
-                    f"Target SQL table `{tbl_name}` dtype length doesn't match `settings`. target: `{target_dtype}:{target_dtype_length}` source: `{source_dtype}:{source_dtype_length}`"
+                    f"Target SQL table `{tbl_name}` column `{col.name}` dtype length doesn't match `settings`. target: `{target_dtype}:{target_dtype_length}` source: `{source_dtype}:{source_dtype_length}`"
                 )
 
             # works thanks to the as_generic() conversion above
             if not target_dtype.__class__ == source_dtype.__class__:
                 raise TypeError(
-                    f"Target SQL table `{tbl_name}` column types don't match `settings`. target: `{target_dtype}` source: `{source_dtype}`"
+                    f"Target SQL table `{tbl_name}` column `{col.name}` types don't match `settings`. target: `{target_dtype}` source: `{source_dtype}`"
                 )
