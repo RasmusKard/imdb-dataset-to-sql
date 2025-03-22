@@ -4,7 +4,7 @@
 
 1. Remove rows where `genres` is `NULL`
 2. If `startYear` is `NULL` then use the last seen value
-3. Keeping `tconst` row in all tables as an identifier is mandatory.
+3. Keeping `tconst` column in all tables as an identifier is mandatory.
 
 ## Overview of code
 
