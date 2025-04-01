@@ -10,11 +10,13 @@ import sqlalchemy.types as sqltypes
 from modules import settings_parsers
 from modules.helpers import join_path_with_random_uuid, download_imdb_dataset
 from typing import Any
+from dotenv import load_dotenv
 
 
-# generate names for temp files here
+load_dotenv()
 
 is_updater = getenv("IS_UPDATER", "False").lower() in ("true", "1", "t")
+print(is_updater)
 
 environ["POLARS_FORCE_NEW_STREAMING"] = "1"
 
@@ -53,15 +55,10 @@ with tempfile.TemporaryDirectory() as tmpdir:
     if IS_CONVERT_TTYPE:
         const.IMDB_DATA_ALLOWED_COLUMNS["titleType"] = sqltypes.SMALLINT()
 
-    sql_creds = SETTINGS.get("database")
-    if not sql_creds:
+    sql_url = getenv("SQL_URL")
+    if not sql_url:
         raise Exception("SQL credentials not found in config")
-
-    sql_dialect = sql_creds["dialect"]
-    sql_driver = sql_creds.get("driver")
-    sql_driver = f"+{sql_driver}" if sql_driver else ""
-    sql_uri = f"{sql_dialect}{sql_driver}://{sql_creds['user']}:{environ['SQL_PASSWORD']}@{sql_creds['host']}:{sql_creds['port']}/{sql_creds['database']}"
-    SQL_ENGINE = create_engine(sql_uri)
+    SQL_ENGINE = create_engine(sql_url)
 
     if (
         not SETTINGS.get("is_ignore_db_has_tables_error")
@@ -153,7 +150,7 @@ with tempfile.TemporaryDirectory() as tmpdir:
             table_info=tbl_info,
             table_name=tbl_name,
             sql_engine=SQL_ENGINE,
-            sql_uri=sql_uri,
+            sql_uri=sql_url,
             main_file_path=MAIN_FILE_PATH,
             genres_file_path=GENRES_FILE_PATH,
             settings=SETTINGS,
