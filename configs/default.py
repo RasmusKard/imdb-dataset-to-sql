@@ -20,22 +20,17 @@ import sqlalchemy.types as dtype
 config_dict = {
     "tables": {
         "title": {
-        "values": {
-            "tconst": "tconst",
-            "titleType": "titleType",
-            "primaryTitle": "primaryTitle",
-            "startYear": "startYear",
-            "runtimeMinutes": "runtimeMinutes",
-            "averageRating": "averageRating",
-            "numVotes": "numVotes"
-        }
+            "values": {
+                "tconst": "tconst",
+                "titleType": "title_type",
+                "primaryTitle": "primary_title",
+                "startYear": "start_year",
+                "runtimeMinutes": "runtime_minutes",
+                "averageRating": "average_rating",
+                "numVotes": "num_votes",
+            }
         },
-        "title_genres": {
-        "values": {
-            "tconst": "tconst",
-            "genres": "genres"
-        }
-        }
+        "title_genres": {"values": {"tconst": "tconst", "genres": "genres"}},
     },
     "settings": {
         # "blocked_genres": {"Horror", "Musical", "Short"},

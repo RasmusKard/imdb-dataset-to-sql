@@ -1,7 +1,6 @@
 import polars as pl
 import sqlalchemy.types as sqltypes
 
-
 IMDB_TITLE_BASICS_URL = "https://datasets.imdbws.com/title.basics.tsv.gz"
 IMDB_TITLE_RATINGS_URL = "https://datasets.imdbws.com/title.ratings.tsv.gz"
 
@@ -57,4 +56,4 @@ IMDB_DATA_ALLOWED_COLUMNS = {
     "numVotes": sqltypes.INT(),
 }
 
-COL_NAME_REFTABLE_NAME = {"genres": "genres_ref", "titleType": "titleType_ref"}
+COL_NAME_REFTABLE_NAME = {"genres": "genres_ref", "titleType": "title_type_ref"}
