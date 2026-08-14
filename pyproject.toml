@@ -2,10 +2,8 @@
 name = "imdb-dataset-to-mysql"
 version = "0.1.0"
 requires-python = ">=3.11,<3.14"
-dependencies = [
-    "python-dotenv",
-    "pandas",
-    "polars",
-    "pyarrow",
-    "SQLAlchemy",
-]
+dependencies = ["python-dotenv", "pandas", "polars", "pyarrow", "SQLAlchemy"]
+
+[project.optional-dependencies]
+postgres = ["psycopg2-binary"]
+mysql = ["pymysql"]
