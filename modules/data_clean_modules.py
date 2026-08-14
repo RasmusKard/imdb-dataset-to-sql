@@ -1,6 +1,5 @@
 from os import path, remove
 import polars as pl
-import os.path
 from modules.helpers import join_path_with_random_uuid
 import os
 from modules.const import PL_SCHEMA_OVERRIDE
@@ -61,7 +60,7 @@ def clean_title_and_join_with_ratings(
         lf = (
             pl.scan_parquet(title_path)
             .with_columns(pl.col("startYear").fill_null(strategy="forward"))
-            .collect(new_streaming=settings.get("is_streaming", False))
+            .collect()
         )
         save_dataframe(file_path=title_path, tmpdir=tmpdir, dataframe_to_write=lf)
 
@@ -106,9 +105,7 @@ def batched_clean_title_data_and_join_with_ratings(
                 lf = df.lazy()
                 lf = apply_title_cleaners(lf, settings=settings, is_batching=True)
                 lf = lf.join(ratings_lf, how="inner", on="tconst")
-                lf.collect(new_streaming=True).write_csv(
-                    f, include_header=is_first_write
-                )
+                lf.collect().write_csv(f, include_header=is_first_write)
 
             batches = reader.next_batches(batch_count)
 
@@ -195,7 +192,7 @@ def change_str_to_int(column_name, file_path, is_streaming):
     df = (
         pl.scan_csv(file_path, schema_overrides=PL_SCHEMA_OVERRIDE)
         .with_columns(pl.col(column_name))
-        .collect(new_streaming=is_streaming)
+        .collect()
     )
 
     unique_values = df[column_name].unique().to_list()

@@ -152,7 +152,7 @@ def table_to_sql(
                 + f"Dialect is supported for native data-import but driver isn't, please use one of the following drivers for improved import speed: {NATIVE_IMPORT_SUPPORTED_DIALECTS[sql_dialect_name]}"
             )
 
-        df = lf.collect(new_streaming=True).to_pandas(use_pyarrow_extension_array=True)
+        df = lf.collect().to_pandas(use_pyarrow_extension_array=True)
 
         df.to_sql(
             name=table_name,

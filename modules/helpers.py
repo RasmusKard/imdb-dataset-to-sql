@@ -4,7 +4,6 @@ from urllib.request import urlretrieve
 import uuid
 import gzip
 from shutil import copyfileobj
-from sqlalchemy.dialects import registry
 
 
 def join_path_with_random_uuid(path):

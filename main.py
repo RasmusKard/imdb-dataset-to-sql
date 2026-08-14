@@ -1,7 +1,7 @@
 import modules.data_clean_modules as dm
-import modules.dataframe_to_mysql as dfsql
+import modules.dataframe_to_sql as dfsql
 import modules.const as const
-from os import getenv, environ, listdir
+from os import getenv, environ
 import shutil
 from sqlalchemy import create_engine, inspect
 import configs.default
@@ -12,20 +12,24 @@ from modules.helpers import join_path_with_random_uuid, download_imdb_dataset
 from typing import Any
 from dotenv import load_dotenv
 
+true_tuple = ("true", "1")
+
 load_dotenv()
 
-is_updater = getenv("IS_UPDATER", "False").lower() in ("true", "1", "t")
-print(is_updater)
-
-environ["POLARS_FORCE_NEW_STREAMING"] = "1"
+is_updater = getenv("IS_UPDATER", "False").lower() in true_tuple
 
 
 with tempfile.TemporaryDirectory() as tmpdir:
+    sql_url = getenv("SQL_URL")
+    if not sql_url:
+        raise Exception("SQL credentials not found in config")
+    SQL_ENGINE = create_engine(sql_url)
+
     MAIN_FILE_PATH = join_path_with_random_uuid(tmpdir)
     RATINGS_FILE_PATH = join_path_with_random_uuid(tmpdir)
     GENRES_FILE_PATH = join_path_with_random_uuid(tmpdir)
 
-    if environ["IS_DEV"]:
+    if environ["IS_DEV"].lower() in true_tuple:
         # FOR DEV TO AVOID REDOWNLOADING
         shutil.copy2("title.basics.tsv", MAIN_FILE_PATH)
         shutil.copy2("title.ratings.tsv", RATINGS_FILE_PATH)
@@ -54,11 +58,6 @@ with tempfile.TemporaryDirectory() as tmpdir:
     IS_CONVERT_TTYPE = SETTINGS.get("is_convert_title_type_str_to_int")
     if IS_CONVERT_TTYPE:
         const.IMDB_DATA_ALLOWED_COLUMNS["titleType"] = sqltypes.SMALLINT()
-
-    sql_url = getenv("SQL_URL")
-    if not sql_url:
-        raise Exception("SQL credentials not found in config")
-    SQL_ENGINE = create_engine(sql_url)
 
     if (
         not SETTINGS.get("is_ignore_db_has_tables_error")
