@@ -12,7 +12,6 @@ from modules.helpers import join_path_with_random_uuid, download_imdb_dataset
 from typing import Any
 from dotenv import load_dotenv
 
-
 load_dotenv()
 
 is_updater = getenv("IS_UPDATER", "False").lower() in ("true", "1", "t")
@@ -26,13 +25,14 @@ with tempfile.TemporaryDirectory() as tmpdir:
     RATINGS_FILE_PATH = join_path_with_random_uuid(tmpdir)
     GENRES_FILE_PATH = join_path_with_random_uuid(tmpdir)
 
-    # Download ratings and title files from IMDb
-    # download_imdb_dataset(const.IMDB_TITLE_BASICS_URL, MAIN_FILE_PATH)
-    # download_imdb_dataset(const.IMDB_TITLE_RATINGS_URL, RATINGS_FILE_PATH)
-
-    # FOR DEV TO AVOID REDOWNLOADING
-    shutil.copy2("title.basics.tsv", MAIN_FILE_PATH)
-    shutil.copy2("title.ratings.tsv", RATINGS_FILE_PATH)
+    if environ["IS_DEV"]:
+        # FOR DEV TO AVOID REDOWNLOADING
+        shutil.copy2("title.basics.tsv", MAIN_FILE_PATH)
+        shutil.copy2("title.ratings.tsv", RATINGS_FILE_PATH)
+    else:
+        # Download ratings and title files from IMDb
+        download_imdb_dataset(const.IMDB_TITLE_BASICS_URL, MAIN_FILE_PATH)
+        download_imdb_dataset(const.IMDB_TITLE_RATINGS_URL, RATINGS_FILE_PATH)
 
     SELECTED_CONFIG: dict[str, Any] = configs.default.config_dict
     SETTINGS: dict | None = SELECTED_CONFIG.get("settings")
