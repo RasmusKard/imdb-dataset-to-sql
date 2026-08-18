@@ -1,27 +1,67 @@
 import pandas as pd
 import warnings
 import polars as pl
-from modules.const import PL_SPLIT_GENRES_FILE_SCHEMA, PL_SCHEMA_OVERRIDE
+from modules.const import (
+    PL_SPLIT_GENRES_FILE_SCHEMA,
+    PL_SCHEMA_OVERRIDE,
+    COL_NAME_REFTABLE_NAME,
+)
 from modules.helpers import join_path_with_random_uuid
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.types import SMALLINT
 
 
+def clear_table(sql_engine, table_name):
+    """Empty a table without dropping it.
+
+    Used instead of `if_exists="replace"` when the table already exists, so that
+    constraints, indexes and grants defined outside this tool survive a reload. The
+    statement is dialect specific because neither database can express the other's:
+    MySQL has no `TRUNCATE ... CASCADE`, and it refuses `TRUNCATE` outright on a table
+    a foreign key points at.
+    """
+    quoted = sql_engine.dialect.identifier_preparer.quote(table_name)
+
+    with sql_engine.begin() as conn:
+        match sql_engine.dialect.name:
+            case "postgresql":
+                conn.execute(text(f"TRUNCATE TABLE {quoted} CASCADE"))
+            case "mysql":
+                conn.execute(text("SET FOREIGN_KEY_CHECKS=0"))
+                try:
+                    conn.execute(text(f"TRUNCATE TABLE {quoted}"))
+                finally:
+                    conn.execute(text("SET FOREIGN_KEY_CHECKS=1"))
+            case _:
+                conn.execute(text(f"DELETE FROM {quoted}"))
+
+
 def create_reference_table(sql_engine, value_dict, column_name):
-    table_name = f"{column_name}_ref"
+    # The table name comes from the mapping rather than the column name, so that a
+    # camelCase IMDb column (`titleType`) still lands in a snake_case table
+    # (`title_type_ref`) and matches what get_is_settings_match_db_shape() looks for.
+    table_name = COL_NAME_REFTABLE_NAME.get(column_name, f"{column_name}_ref")
     id_col = f"{column_name}_id"
     str_col = f"{column_name}_str"
 
     ref_data = {id_col: list(value_dict.values()), str_col: list(value_dict.keys())}
     df = pd.DataFrame(ref_data)
 
-    df.to_sql(
-        table_name,
-        con=sql_engine,
-        if_exists="replace",
-        index=False,
-        dtype={id_col: SMALLINT()},
-    )
+    # `if_exists="replace"` drops the table, which is impossible while another table holds
+    # a foreign key onto it, and throws away anything this tool did not create. Refresh the
+    # rows in place when the table is already there. On Postgres the CASCADE empties the
+    # dependent data tables too; they are reloaded immediately afterwards.
+    if inspect(sql_engine).has_table(table_name):
+        clear_table(sql_engine, table_name)
+        df.to_sql(table_name, con=sql_engine, if_exists="append", index=False)
+    else:
+        df.to_sql(
+            table_name,
+            con=sql_engine,
+            if_exists="replace",
+            index=False,
+            dtype={id_col: SMALLINT()},
+        )
 
 
 def table_to_sql(
@@ -91,6 +131,15 @@ def table_to_sql(
         tmp_path = join_path_with_random_uuid(tmpdir)
         lf.sink_csv(tmp_path)
 
+        # Name the columns being loaded rather than relying on positional order. Without a
+        # column list both dialects expect every column of the table, in declaration order,
+        # so a table carrying anything this tool does not write - a column with a default, a
+        # generated column - fails the load.
+        with open(tmp_path) as header_file:
+            csv_columns = header_file.readline().strip().split(",")
+        quote = sql_engine.dialect.identifier_preparer.quote
+        column_list = ", ".join(quote(c) for c in csv_columns)
+
         # create the table using the csv headers and dtype_dict
         # skip if updating to not mess up indices
         if not is_updater:
@@ -112,7 +161,13 @@ def table_to_sql(
                     cur.execute("SET GLOBAL local_infile=1;")
 
                     if is_updater:
-                        cur.execute(f"""TRUNCATE TABLE {table_name}""")
+                        # MySQL refuses TRUNCATE on a table a foreign key references, so
+                        # the checks come off for the duration.
+                        cur.execute("SET FOREIGN_KEY_CHECKS=0")
+                        try:
+                            cur.execute(f"""TRUNCATE TABLE {table_name}""")
+                        finally:
+                            cur.execute("SET FOREIGN_KEY_CHECKS=1")
 
                     sql_load = f"""
                     LOAD DATA LOCAL INFILE '{tmp_path}'
@@ -120,7 +175,8 @@ def table_to_sql(
                     FIELDS TERMINATED BY ','
                     ENCLOSED BY '"'
                     LINES TERMINATED BY '\\n'
-                    IGNORE 1 ROWS;
+                    IGNORE 1 ROWS
+                    ({column_list});
                     """
 
                     cur.execute(sql_load)
@@ -131,10 +187,13 @@ def table_to_sql(
                     cur = conn.cursor()
 
                     if is_updater:
-                        cur.execute(f"""TRUNCATE TABLE {table_name}""")
+                        # CASCADE because the loaded tables reference each other, and
+                        # Postgres refuses a plain TRUNCATE on a referenced table even when
+                        # the referencing table is empty.
+                        cur.execute(f"""TRUNCATE TABLE {table_name} CASCADE""")
 
                     copy_sql = f"""
-                    COPY {table_name} FROM stdin WITH CSV HEADER
+                    COPY {table_name} ({column_list}) FROM stdin WITH CSV HEADER
                     DELIMITER as ','
                     """
 

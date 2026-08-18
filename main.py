@@ -1,10 +1,10 @@
 import modules.data_clean_modules as dm
 import modules.dataframe_to_sql as dfsql
 import modules.const as const
-from os import getenv, environ
+from os import getenv
 import shutil
 from sqlalchemy import create_engine, inspect
-import configs.default
+import importlib
 import tempfile
 import sqlalchemy.types as sqltypes
 from modules import settings_parsers
@@ -29,7 +29,7 @@ with tempfile.TemporaryDirectory() as tmpdir:
     RATINGS_FILE_PATH = join_path_with_random_uuid(tmpdir)
     GENRES_FILE_PATH = join_path_with_random_uuid(tmpdir)
 
-    if environ["IS_DEV"].lower() in true_tuple:
+    if getenv("IS_DEV", "False").lower() in true_tuple:
         # FOR DEV TO AVOID REDOWNLOADING
         shutil.copy2("title.basics.tsv", MAIN_FILE_PATH)
         shutil.copy2("title.ratings.tsv", RATINGS_FILE_PATH)
@@ -38,7 +38,11 @@ with tempfile.TemporaryDirectory() as tmpdir:
         download_imdb_dataset(const.IMDB_TITLE_BASICS_URL, MAIN_FILE_PATH)
         download_imdb_dataset(const.IMDB_TITLE_RATINGS_URL, RATINGS_FILE_PATH)
 
-    SELECTED_CONFIG: dict[str, Any] = configs.default.config_dict
+    # The README describes adding config files alongside `default`; pick one with CONFIG.
+    CONFIG_NAME = getenv("CONFIG", "default")
+    SELECTED_CONFIG: dict[str, Any] = importlib.import_module(
+        f"configs.{CONFIG_NAME}"
+    ).config_dict
     SETTINGS: dict | None = SELECTED_CONFIG.get("settings")
     if not SETTINGS:
         raise Exception(
@@ -121,12 +125,15 @@ with tempfile.TemporaryDirectory() as tmpdir:
             is_streaming=IS_STREAMING,
         )
 
-        if not is_updater:
-            dfsql.create_reference_table(
-                sql_engine=SQL_ENGINE,
-                value_dict=genres_values,
-                column_name=genres_column_name,
-            )
+        # Rebuilt on every run, not only on a first load: change_str_to_int() numbers the
+        # values positionally over the sorted distinct set in the dump being loaded, so a
+        # reference table left over from an earlier dump starts pointing at the wrong
+        # strings as soon as that set changes.
+        dfsql.create_reference_table(
+            sql_engine=SQL_ENGINE,
+            value_dict=genres_values,
+            column_name=genres_column_name,
+        )
 
     if IS_CONVERT_TTYPE:
         titleType_column_name = "titleType"
@@ -137,12 +144,11 @@ with tempfile.TemporaryDirectory() as tmpdir:
             is_streaming=IS_STREAMING,
         )
 
-        if not is_updater:
-            dfsql.create_reference_table(
-                sql_engine=SQL_ENGINE,
-                value_dict=titleType_values,
-                column_name=titleType_column_name,
-            )
+        dfsql.create_reference_table(
+            sql_engine=SQL_ENGINE,
+            value_dict=titleType_values,
+            column_name=titleType_column_name,
+        )
 
     for tbl_name, tbl_info in tables_info.items():
         dfsql.table_to_sql(

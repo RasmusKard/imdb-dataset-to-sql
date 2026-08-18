@@ -62,13 +62,16 @@ def get_is_settings_match_db_shape(tables_info, sql_engine, reftable_names):
 
         source_col_set = set(dtype_dict.keys())
         target_col_set = set(target_cols.keys())
-        # source columns and target columns `name`s are the exact same
-        if not target_col_set == source_col_set:
+        # Every column named in `settings` has to exist in the target, but the target is
+        # allowed extra columns that it maintains itself - a column with a default, a
+        # generated column, anything a migration owns. Those are not this tool's business,
+        # so require a subset rather than an exact match, and only type-check what is shared.
+        if not source_col_set.issubset(target_col_set):
             raise ValueError(
-                f"Target SQL table `{tbl_name}` column names don't match `settings`. target: `{target_col_set}` source: `{source_col_set}`"
+                f"Target SQL table `{tbl_name}` is missing columns named in `settings`. missing: `{source_col_set - target_col_set}` target: `{target_col_set}` source: `{source_col_set}`"
             )
 
-        for col in target_cols:
+        for col in (c for c in target_cols if c.name in source_col_set):
             target_dtype = col.type.as_generic()
             source_dtype = dtype_dict[col.name].as_generic()
 
