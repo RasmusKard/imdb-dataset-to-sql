@@ -29,6 +29,15 @@
 CONFIG=my_project uv run main.py
 ```
 
+### Generating a config with the wizard
+
+`uv run init.py` opens a TUI where every column's include flag, SQL name and dtype
+is edited on one screen, along with table names, ref-table toggles and the cleaning
+settings. `Generate config` previews the file, validates it against the same checks
+`main.py` runs, and writes it to `configs/<name>.py` after confirmation. Dtypes accept
+generic SQLAlchemy types (`String(400)`, `Text`, `SmallInteger`, ...); an input left at
+its default is omitted from the generated file.
+
 ## Updater mode against a schema you did not create
 
 `IS_UPDATER=True` loads into tables that already exist instead of replacing them, so it can
