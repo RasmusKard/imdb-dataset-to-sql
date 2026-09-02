@@ -49,9 +49,13 @@ def get_is_settings_match_db_shape(tables_info, sql_engine, reftable_names):
     if reftable_names:
         source_table_names.update(reftable_names)
     target_table_names = set(target_tables.keys())
-    if not source_table_names == target_table_names:
+    # Same principle as the column check below, one level up: against a schema reached
+    # through search_path, other tools' tables may legitimately exist alongside the ones
+    # this tool loads - require every source table to exist in the target rather than an
+    # exact match.
+    if not source_table_names.issubset(target_table_names):
         raise ValueError(
-            f"Source table names `{source_table_names}` don't match target table names `{target_table_names}`"
+            f"Source tables `{source_table_names - target_table_names}` missing from target tables `{target_table_names}`"
         )
 
     for tbl_name, tbl_info in tables_info.items():
