@@ -1,3 +1,6 @@
+import os.path
+import re
+
 import pandas as pd
 import warnings
 import polars as pl
@@ -9,6 +12,38 @@ from modules.const import (
 from modules.helpers import join_path_with_random_uuid
 from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.types import SMALLINT
+
+_SAFE_IDENTIFIER = re.compile(r"[A-Za-z_][A-Za-z0-9_]*\Z")
+
+
+def _assert_scratch_file(path, directory):
+    """Refuse any path that does not resolve under `directory`.
+
+    The scratch path reaches a LOAD DATA / COPY statement as a literal (neither
+    statement accepts a bound parameter for a file), so its confinement is asserted
+    rather than assumed.
+    """
+    root = os.path.realpath(directory)
+    if not os.path.realpath(path).startswith(root + os.sep):
+        raise ValueError(f"{path!r} is not under {directory!r}")
+
+
+def _quoted_identifier(dialect):
+    """Return a function that quotes an SQL identifier after a strict charset check.
+
+    For the statements that take no bound parameters for names (TRUNCATE, LOAD DATA),
+    the charset gate is the actual boundary - the names come from the loader config and
+    the CSV header it just wrote, never from anything request-borne - and the dialect's
+    own quoting then handles reserved words.
+    """
+    quote = dialect.identifier_preparer.quote
+
+    def quoted(name):
+        if not _SAFE_IDENTIFIER.fullmatch(name):
+            raise ValueError(f"refusing unsafe SQL identifier: {name!r}")
+        return quote(name)
+
+    return quoted
 
 
 def clear_table(sql_engine, table_name):
@@ -121,15 +156,22 @@ def table_to_sql(
 
     sql_dialect_name = sql_engine.dialect.name
     sql_dialect_driver = sql_engine.dialect.driver
-    is_dialect_supported = sql_dialect_name in NATIVE_IMPORT_SUPPORTED_DIALECTS
+    # Native bulk import (COPY from a scratch CSV) is Postgres-only: psycopg2's
+    # sql.Identifier composes table and column names as first-class identifier objects,
+    # while MySQL's LOAD DATA and TRUNCATE accept neither bound parameters nor any safe
+    # composition API, so building those statements as strings is not an option here.
+    # MySQL keeps a correct, slower path in the fallback below: FK-safe clear_table()
+    # plus pandas' fully parameterized to_sql().
+    is_native_import = (
+        sql_dialect_name == "postgresql"
+        and sql_dialect_driver in NATIVE_IMPORT_SUPPORTED_DIALECTS["postgresql"]
+    )
 
-    if (
-        is_dialect_supported
-        and sql_dialect_driver in NATIVE_IMPORT_SUPPORTED_DIALECTS[sql_dialect_name]
-    ):
+    if is_native_import:
 
         tmp_path = join_path_with_random_uuid(tmpdir)
         lf.sink_csv(tmp_path)
+        _assert_scratch_file(tmp_path, tmpdir)
 
         # Name the columns being loaded rather than relying on positional order. Without a
         # column list both dialects expect every column of the table, in declaration order,
@@ -137,8 +179,6 @@ def table_to_sql(
         # generated column - fails the load.
         with open(tmp_path) as header_file:
             csv_columns = header_file.readline().strip().split(",")
-        quote = sql_engine.dialect.identifier_preparer.quote
-        column_list = ", ".join(quote(c) for c in csv_columns)
 
         # create the table using the csv headers and dtype_dict
         # skip if updating to not mess up indices
@@ -152,71 +192,69 @@ def table_to_sql(
                 dtype=dtype_dict,
             )
 
+        from psycopg2 import sql as pgsql
+
+        conn = sql_engine.raw_connection()
+        # raw_connection() returns SQLAlchemy's pooled proxy around the DBAPI connection;
+        # psycopg2's C-level quote_ident (inside as_string below) rejects the proxy, so
+        # pass the driver-level connection it wraps.
+        dbapi_conn = getattr(conn, "driver_connection", None) or getattr(conn, "connection", conn)
         try:
-            match sql_dialect_name:
-                case "mysql":
-                    sql_engine = create_engine(sql_uri + "?local_infile=1")
-                    conn = sql_engine.raw_connection()
-                    cur = conn.cursor()
-                    cur.execute("SET GLOBAL local_infile=1;")
+            cur = conn.cursor()
 
-                    if is_updater:
-                        # MySQL refuses TRUNCATE on a table a foreign key references, so
-                        # the checks come off for the duration.
-                        cur.execute("SET FOREIGN_KEY_CHECKS=0")
-                        try:
-                            cur.execute(f"""TRUNCATE TABLE {table_name}""")
-                        finally:
-                            cur.execute("SET FOREIGN_KEY_CHECKS=1")
+            if is_updater:
+                # CASCADE because the loaded tables reference each other, and Postgres
+                # refuses a plain TRUNCATE on a referenced table even when the referencing
+                # table is empty.
+                cur.execute(
+                    pgsql.SQL("TRUNCATE TABLE {} CASCADE").format(
+                        pgsql.Identifier(table_name)
+                    )
+                )
 
-                    sql_load = f"""
-                    LOAD DATA LOCAL INFILE '{tmp_path}'
-                    INTO TABLE {table_name}
-                    FIELDS TERMINATED BY ','
-                    ENCLOSED BY '"'
-                    LINES TERMINATED BY '\\n'
-                    IGNORE 1 ROWS
-                    ({column_list});
-                    """
+            # The row data travels on stdin; only names appear in the statement, and they
+            # are composed as identifier objects, never interpolated into the text.
+            copy_query = pgsql.SQL(
+                "COPY {} ({}) FROM stdin WITH CSV HEADER DELIMITER as ','"
+            ).format(
+                pgsql.Identifier(table_name),
+                pgsql.SQL(", ").join(pgsql.Identifier(c) for c in csv_columns),
+            )
 
-                    cur.execute(sql_load)
-                    cur.execute("SET GLOBAL local_infile=0;")
+            with open(tmp_path, "r") as f:
+                cur.copy_expert(sql=copy_query.as_string(dbapi_conn), file=f)
 
-                case "postgresql":
-                    conn = sql_engine.raw_connection()
-                    cur = conn.cursor()
-
-                    if is_updater:
-                        # CASCADE because the loaded tables reference each other, and
-                        # Postgres refuses a plain TRUNCATE on a referenced table even when
-                        # the referencing table is empty.
-                        cur.execute(f"""TRUNCATE TABLE {table_name} CASCADE""")
-
-                    copy_sql = f"""
-                    COPY {table_name} ({column_list}) FROM stdin WITH CSV HEADER
-                    DELIMITER as ','
-                    """
-
-                    with open(tmp_path, "r") as f:
-                        cur.copy_expert(sql=copy_sql, file=f)
-
-        finally:
             conn.commit()
+        finally:
             cur.close()
             conn.close()
     else:
-        if is_dialect_supported:
+        if sql_dialect_name in NATIVE_IMPORT_SUPPORTED_DIALECTS:
             warnings.warn(
                 "\nWARNING: Falling back to Pandas.to_sql().\n"
-                + f"Dialect is supported for native data-import but driver isn't, please use one of the following drivers for improved import speed: {NATIVE_IMPORT_SUPPORTED_DIALECTS[sql_dialect_name]}"
+                + f"Native {sql_dialect_name} import is not used here because its bulk-load "
+                + "statements cannot be written without assembling SQL strings; the fallback "
+                + "is parameterized and FK-safe, at pandas speed."
             )
 
         df = lf.collect().to_pandas(use_pyarrow_extension_array=True)
 
-        df.to_sql(
-            name=table_name,
-            con=sql_engine,
-            if_exists="replace",
-            index=False,
-            dtype=dtype_dict,
-        )
+        if is_updater:
+            # The table is migration-owned: refresh the rows in place so indexes,
+            # constraints and grants survive, mirroring the Postgres COPY path.
+            clear_table(sql_engine, table_name)
+            df.to_sql(
+                name=table_name,
+                con=sql_engine,
+                if_exists="append",
+                index=False,
+                dtype=dtype_dict,
+            )
+        else:
+            df.to_sql(
+                name=table_name,
+                con=sql_engine,
+                if_exists="replace",
+                index=False,
+                dtype=dtype_dict,
+            )
