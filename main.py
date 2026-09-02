@@ -25,18 +25,19 @@ with tempfile.TemporaryDirectory() as tmpdir:
         raise Exception("SQL credentials not found in config")
     SQL_ENGINE = create_engine(sql_url)
 
-    MAIN_FILE_PATH = join_path_with_random_uuid(tmpdir)
-    RATINGS_FILE_PATH = join_path_with_random_uuid(tmpdir)
     GENRES_FILE_PATH = join_path_with_random_uuid(tmpdir)
 
     if getenv("IS_DEV", "False").lower() in true_tuple:
+        MAIN_FILE_PATH = join_path_with_random_uuid(tmpdir)
+        RATINGS_FILE_PATH = join_path_with_random_uuid(tmpdir)
         # FOR DEV TO AVOID REDOWNLOADING
         shutil.copy2("title.basics.tsv", MAIN_FILE_PATH)
         shutil.copy2("title.ratings.tsv", RATINGS_FILE_PATH)
     else:
-        # Download ratings and title files from IMDb
-        download_imdb_dataset(const.IMDB_TITLE_BASICS_URL, MAIN_FILE_PATH)
-        download_imdb_dataset(const.IMDB_TITLE_RATINGS_URL, RATINGS_FILE_PATH)
+        # Download ratings and title files from IMDb; each call returns the path of the
+        # gunzipped dump it left in the temp dir.
+        MAIN_FILE_PATH = download_imdb_dataset(const.IMDB_TITLE_BASICS_URL, tmpdir)
+        RATINGS_FILE_PATH = download_imdb_dataset(const.IMDB_TITLE_RATINGS_URL, tmpdir)
 
     # The README describes adding config files alongside `default`; pick one with CONFIG.
     CONFIG_NAME = getenv("CONFIG", "default")
